@@ -1,0 +1,12 @@
+{
+    "name": "LiDAR",
+    "author": "fviuff",
+    "version": "1.0.0",
+    "description": "LIDAR",
+    "order": {
+        "require": [],
+        "this_before": [],
+        "this_after": []
+    },
+    "localization": {}
+}

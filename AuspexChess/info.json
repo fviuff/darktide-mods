@@ -1,0 +1,14 @@
+{
+    "name": "AuspexChess",
+    "author": "fviuff",
+    "version": "1.0.0",
+    "description": "Replace selected auspex minigames with lichess chess puzzles",
+    "order": {
+        "require": [
+            "SimpleAssets"
+        ],
+        "this_before": [],
+        "this_after": []
+    },
+    "localization": {}
+}

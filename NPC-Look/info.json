@@ -1,0 +1,12 @@
+{
+    "name": "NPC Look",
+    "author": "fviuff",
+    "version": "2.1.1",
+    "description": "Equip and search for any item. Preview NPC outfits, mix individual pieces, hide or replace slots, and share presets with importable codes. Use /npclook_ui to open ui.",
+    "order": {
+        "require": [ResourceLoader],
+        "this_before": [],
+        "this_after": []
+    },
+    "localization": {}
+}
