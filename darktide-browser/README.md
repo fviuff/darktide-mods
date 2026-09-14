@@ -1,6 +1,6 @@
 # Darktide Browser
 
-Darktide Browser is a library that exposes Steam HTML surfaces to other mods.
+https://www.nexusmods.com/warhammer40kdarktide/mods/1311
 
 The Lua side loads `darktide-browser-runtime.dll` through LuaJIT FFI. The runtime uses Steamworks `ISteamHTMLSurface` for browser rendering and copies browser frames into Darktide D3D12 render targets.
 
