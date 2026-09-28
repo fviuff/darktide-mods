@@ -1,8 +1,27 @@
 https://www.nexusmods.com/warhammer40kdarktide/mods/1200
+# Custom Assets
+
+## Assets
+
+Put assets in:
+
+```text
+mods/<YourMod>/Custom/<AssetName>/
+```
+
+It only patches recognized resources.
+
+## Without the Lua API
+
+The Lua API is optional. Assets are patched and registered with the game either way.
+
+After patching, get the package name from:
+
+```text
+mods/CustomAssets/generated/custom_assets_manifest.json
+```
 
 # Custom Assets API
-
-You do not need the lua the assets will already be patched in regardless. This is just for utility:
 
 Put `CustomAssets` before mods that use it in `mod_load_order.txt`.
 
