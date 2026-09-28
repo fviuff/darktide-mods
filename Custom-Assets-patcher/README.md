@@ -2,7 +2,7 @@ https://www.nexusmods.com/warhammer40kdarktide/mods/1200
 
 # Custom Assets API
 
-You do not need the lua the assets will already be patched in regardless.
+You do not need the lua the assets will already be patched in regardless. This is just for utility:
 
 Put `CustomAssets` before mods that use it in `mod_load_order.txt`.
 
