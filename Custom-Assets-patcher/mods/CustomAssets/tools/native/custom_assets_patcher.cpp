@@ -41,7 +41,7 @@ using Bytes = std::vector<u8>;
 using Hash8 = std::array<u8, 8>;
 namespace fs = std::filesystem;
 
-static constexpr const char *VERSION = "1.0.0-public";
+static constexpr const char *VERSION = "1.0.1";
 static constexpr int STATE_SCHEMA = 2;
 static constexpr const char *BASE_BUNDLE = "a2bbcc3451758add";
 static constexpr const char *STORAGE_BASE_BUNDLE = "9ba626afa44a3aa3";
@@ -1713,10 +1713,6 @@ static std::vector<std::pair<Hash8, Hash8>> parse_package_blob(const Bytes &blob
     const u32 version = read_u32(blob, body);
     const u32 count = read_u32(blob, body + 4);
 
-    if (version != PACKAGE_VERSION) {
-        throw PatcherError("unsupported package version " + std::to_string(version) + "; expected 43");
-    }
-
     const u64 expected = 9ull + static_cast<u64>(count) * 16;
 
     if (body_size != expected) {
@@ -2864,10 +2860,53 @@ static BundleRecord parse_record(const Bytes &data, const std::string &base_bund
     return {start, pos, count, std::move(entries)};
 }
 
+static int boot_registration_count(const Bytes &data) {
+    const std::string patch_name = std::string(STORAGE_BASE_BUNDLE) + ".patch_998";
+    const std::string stream_name = std::string(STORAGE_BASE_BUNDLE) + ".stream.patch_998";
+    int count = 0;
+    for (const auto &entry : parse_record(data, STORAGE_BASE_BUNDLE).entries) if (entry.name == patch_name && entry.stream_name == stream_name) ++count;
+    return count;
+}
+
+static Bytes ensure_boot_registration(const Bytes &data) {
+    const BundleRecord record = parse_record(data, STORAGE_BASE_BUNDLE);
+    const std::string patch_name = std::string(STORAGE_BASE_BUNDLE) + ".patch_998";
+    const std::string stream_name = std::string(STORAGE_BASE_BUNDLE) + ".stream.patch_998";
+    const std::string dml_name = std::string(STORAGE_BASE_BUNDLE) + ".patch_999";
+    size_t dml_pos = data.size();
+    size_t boot_pos = data.size();
+    int matches = 0;
+    for (const auto &entry : record.entries) {
+        if (entry.name == dml_name) dml_pos = entry.start;
+        if (entry.name == patch_name || entry.stream_name == stream_name) {
+            if (entry.name != patch_name || entry.stream_name != stream_name) throw PatcherError("conflicting boot carrier patch registration");
+            boot_pos = entry.start;
+            ++matches;
+        }
+    }
+    if (dml_pos == data.size() || matches > 1) throw PatcherError("Darktide Mod Loader and boot carrier patch registrations are invalid");
+    if (matches == 1) {
+        if (boot_pos > dml_pos) throw PatcherError("boot carrier patch must precede Darktide Mod Loader patch_999");
+        return data;
+    }
+    Bytes entry(8, 0);
+    write_u32(entry, 4);
+    append_string(entry, patch_name);
+    append_string(entry, stream_name);
+    entry.push_back(0);
+    entry.insert(entry.end(), 20, 0);
+    Bytes out(data.begin(), data.begin() + static_cast<std::ptrdiff_t>(record.start + 8));
+    write_u32(out, record.count + 1);
+    out.insert(out.end(), data.begin() + static_cast<std::ptrdiff_t>(record.start + 12), data.begin() + static_cast<std::ptrdiff_t>(dml_pos));
+    append_bytes(out, entry);
+    out.insert(out.end(), data.begin() + static_cast<std::ptrdiff_t>(dml_pos), data.end());
+    if (boot_registration_count(out) != 1) throw PatcherError("could not register boot carrier patch");
+    return out;
+}
+
 static BundleTable parse_bundle_table(const Bytes &data) {
     if (data.size() < 8) throw PatcherError("bundle database is truncated");
     const u32 version = read_u32(data, 0, "bundle database is truncated");
-    if (version != 6) throw PatcherError("unsupported bundle database version " + std::to_string(version) + "; expected 6");
     const u32 bundle_count = read_u32(data, 4);
     if (bundle_count < 1) throw PatcherError("bundle database contains no bundle records");
 
@@ -3280,6 +3319,18 @@ public:
         return output;
 #else
         (void)data; (void)output_size; return {};
+#endif
+    }
+
+    Bytes decompress_bundle_chunk(const Bytes &data) {
+#if defined(_WIN32)
+        Bytes output(PATCH_CHUNK_SIZE);
+        const i64 written = decompress_fn(data.data(), static_cast<i64>(data.size()), output.data(), static_cast<i64>(output.size()), 1, 0, 0, nullptr, 0, nullptr, nullptr, nullptr, 0, 3);
+        if (written <= 0 || static_cast<size_t>(written) > output.size()) throw PatcherError("OodleLZ_Decompress failed while reading the retail storage bundle");
+        output.resize(static_cast<size_t>(written));
+        return output;
+#else
+        (void)data; return {};
 #endif
     }
 
@@ -3851,6 +3902,136 @@ static std::map<std::string, BuildPayload> build_asset_bundles(
     return bundles;
 }
 
+static bool bundle_contains_identity(const fs::path &path, const std::string &engine_type, const std::string &name) {
+    const Bytes raw = read_file(path);
+    if (raw.size() < HEADER_BYTES) throw PatcherError("bundle header is truncated: " + path_text(path));
+    const u32 count = read_u32(raw, 8);
+    if (count > MAX_INDEX_RECORDS || HEADER_BYTES + static_cast<size_t>(count) * INDEX_RECORD_BYTES > raw.size()) throw PatcherError("bundle index is invalid: " + path_text(path));
+    const Hash8 type_hash = identity_hash(engine_type).first;
+    const Hash8 name_hash = identity_hash(name).first;
+    for (u32 i = 0; i < count; ++i) {
+        const size_t pos = HEADER_BYTES + static_cast<size_t>(i) * INDEX_RECORD_BYTES;
+        if (std::equal(type_hash.begin(), type_hash.end(), raw.begin() + static_cast<std::ptrdiff_t>(pos)) &&
+            std::equal(name_hash.begin(), name_hash.end(), raw.begin() + static_cast<std::ptrdiff_t>(pos + 8))) return true;
+    }
+    return false;
+}
+
+static Bytes extract_bundle_resource(const fs::path &path, const std::string &engine_type, const std::string &name, DarktideOodleTextureCodec &codec) {
+    const Bytes raw = read_file(path);
+    if (raw.size() < HEADER_BYTES || (read_u64(raw, 0) != 0x00000003f0000008ull && read_u64(raw, 0) != 0x00000003f0000007ull)) throw PatcherError("unsupported retail storage bundle: " + path_text(path));
+    const u32 count = read_u32(raw, 8);
+    if (!count || count > MAX_INDEX_RECORDS) throw PatcherError("retail storage bundle index count is invalid");
+    const size_t index_end = HEADER_BYTES + static_cast<size_t>(count) * INDEX_RECORD_BYTES;
+    if (index_end + 4 > raw.size()) throw PatcherError("retail storage bundle index is truncated");
+    const u32 chunk_count = read_u32(raw, index_end);
+    if (!chunk_count || chunk_count > 0x100000) throw PatcherError("retail storage bundle chunk count is invalid");
+    size_t pos = index_end + 4;
+    if (static_cast<u64>(pos) + static_cast<u64>(chunk_count) * 4 > raw.size()) throw PatcherError("retail storage bundle chunk summary is truncated");
+    std::vector<u32> summary;
+    summary.reserve(chunk_count);
+    for (u32 i = 0; i < chunk_count; ++i) summary.push_back(read_u32(raw, pos + static_cast<size_t>(i) * 4));
+    pos = (pos + static_cast<size_t>(chunk_count) * 4 + 15) & ~static_cast<size_t>(15);
+    const u32 logical_size = read_u32(raw, pos);
+    if (read_u32(raw, pos + 4) != 0) throw PatcherError("retail storage bundle logical-size sentinel is invalid");
+    pos += 8;
+    Bytes payload;
+    payload.reserve(logical_size);
+    for (u32 i = 0; i < chunk_count; ++i) {
+        const u32 encoded_size = read_u32(raw, pos);
+        if (encoded_size != summary[i]) throw PatcherError("retail storage bundle chunk summary differs from its payload");
+        pos = (pos + 4 + 15) & ~static_cast<size_t>(15);
+        if (static_cast<u64>(pos) + encoded_size > raw.size()) throw PatcherError("retail storage bundle chunk is truncated");
+        const Bytes encoded = slice_bytes(raw, pos, pos + encoded_size);
+        pos += encoded_size;
+        Bytes decoded = encoded_size == PATCH_CHUNK_SIZE ? encoded : codec.decompress_bundle_chunk(encoded);
+        if (i + 1 < chunk_count && decoded.size() != PATCH_CHUNK_SIZE) throw PatcherError("retail storage bundle non-final chunk size is invalid");
+        append_bytes(payload, decoded);
+    }
+    if (payload.size() < logical_size) throw PatcherError("retail storage bundle payload is truncated");
+    payload.resize(logical_size);
+    const Hash8 type_hash = identity_hash(engine_type).first;
+    const Hash8 name_hash = identity_hash(name).first;
+    size_t payload_pos = 0;
+    std::optional<Bytes> found;
+    for (u32 i = 0; i < count; ++i) {
+        const size_t index_pos = HEADER_BYTES + static_cast<size_t>(i) * INDEX_RECORD_BYTES;
+        if (payload_pos + 38 > payload.size()) throw PatcherError("retail storage bundle resource is truncated");
+        if (!std::equal(payload.begin() + static_cast<std::ptrdiff_t>(payload_pos), payload.begin() + static_cast<std::ptrdiff_t>(payload_pos + 16), raw.begin() + static_cast<std::ptrdiff_t>(index_pos))) throw PatcherError("retail storage bundle resource order differs from its index");
+        const u64 size = 38ull + read_u32(payload, payload_pos + 29) + read_u32(payload, payload_pos + 34);
+        if (size > payload.size() - payload_pos) throw PatcherError("retail storage bundle resource body is truncated");
+        if (std::equal(type_hash.begin(), type_hash.end(), raw.begin() + static_cast<std::ptrdiff_t>(index_pos)) &&
+            std::equal(name_hash.begin(), name_hash.end(), raw.begin() + static_cast<std::ptrdiff_t>(index_pos + 8))) {
+            if (found) throw PatcherError("retail storage bundle contains duplicate " + engine_type + "/" + name);
+            found = slice_bytes(payload, payload_pos, payload_pos + static_cast<size_t>(size));
+        }
+        payload_pos += static_cast<size_t>(size);
+    }
+    if (payload_pos != payload.size() || !found) throw PatcherError("retail storage bundle does not contain exactly one " + engine_type + "/" + name);
+    return *found;
+}
+
+static bool package_hash_less(const std::pair<Hash8, Hash8> &a, const std::pair<Hash8, Hash8> &b) {
+    if (a.first != b.first) return std::lexicographical_compare(a.first.rbegin(), a.first.rend(), b.first.rbegin(), b.first.rend());
+    return std::lexicographical_compare(a.second.rbegin(), a.second.rend(), b.second.rbegin(), b.second.rend());
+}
+
+static Bytes extend_boot_package(Bytes blob, const std::vector<ResourceSpec> &packages) {
+    const Hash8 expected = identity_hash("packages/boot_assets").first;
+    if (blob.size() < 47 || !std::equal(expected.begin(), expected.end(), blob.begin() + 8)) throw PatcherError("retail packages/boot_assets identity is invalid");
+    auto entries = parse_package_blob(blob);
+    if (!std::is_sorted(entries.begin(), entries.end(), package_hash_less)) throw PatcherError("retail packages/boot_assets member order is unsupported");
+    std::set<std::pair<Hash8, Hash8>> unique(entries.begin(), entries.end());
+    const Hash8 package_type = identity_hash("package").first;
+    for (const auto &package : packages) unique.insert({package_type, identity_hash(package.name).first});
+    entries.assign(unique.begin(), unique.end());
+    std::sort(entries.begin(), entries.end(), package_hash_less);
+    Bytes body;
+    write_u32(body, PACKAGE_VERSION);
+    write_u32(body, static_cast<u32>(entries.size()));
+    for (const auto &entry : entries) { append_bytes(body, entry.first); append_bytes(body, entry.second); }
+    body.push_back(PACKAGE_FOOTER);
+    blob.resize(38);
+    overwrite_u32(blob, 29, static_cast<u32>(body.size()));
+    overwrite_u32(blob, 34, 0);
+    append_bytes(blob, body);
+    return blob;
+}
+
+static BuildPayload build_boot_carrier(const fs::path &game_root, const std::vector<AssetSpec> &assets, const std::map<fs::path, Bytes> &package_outputs, const fs::path &stage_root, const HostBundleMetadata &metadata) {
+    const fs::path storage_base = game_root / "bundle" / STORAGE_BASE_BUNDLE;
+    const fs::path dml_patch = game_root / "bundle" / (std::string(STORAGE_BASE_BUNDLE) + ".patch_999");
+    if (!fs::is_regular_file(dml_patch)) throw PatcherError("Darktide Mod Loader patch_999 file is missing");
+    if (bundle_contains_identity(dml_patch, "package", "packages/boot_assets")) throw PatcherError("Darktide Mod Loader patch_999 overrides packages/boot_assets");
+    DarktideOodleTextureCodec codec(game_root / "binaries" / "oo2core_9_win64.dll");
+    std::vector<ResourceSpec> packages;
+    for (const auto &asset : assets) {
+        const auto it = std::find_if(asset.resources.begin(), asset.resources.end(), [](const ResourceSpec &r) { return r.engine_type == "package"; });
+        if (it == asset.resources.end()) throw PatcherError("asset has no package resource: " + asset.logical_id);
+        ResourceSpec package = *it;
+        const auto generated = package_outputs.find(package.source);
+        if (generated != package_outputs.end()) {
+            package.source = stage_root / (murmur64_hex(package.name) + ".package");
+            write_file(package.source, generated->second);
+        }
+        packages.push_back(std::move(package));
+    }
+    if (packages.empty()) throw PatcherError("boot carrier has no package resources");
+    const Bytes original = extract_bundle_resource(storage_base, "package", "packages/boot_assets", codec);
+    const Bytes extended = extend_boot_package(original, packages);
+    const fs::path boot_path = stage_root / "packages_boot_assets.package";
+    write_file(boot_path, extended);
+    ResourceSpec boot;
+    boot.engine_type = "package";
+    boot.name = "packages/boot_assets";
+    boot.source = boot_path;
+    boot.mode = 0;
+    packages.push_back(std::move(boot));
+    BuildPayload carrier = build_payload(packages, metadata);
+    if (!carrier.stream_sources.empty()) throw PatcherError("boot carrier unexpectedly has external streams");
+    return carrier;
+}
+
 struct ExpectedBuild {
     Layout layout;
     std::vector<AssetSpec> source_assets;
@@ -3858,6 +4039,7 @@ struct ExpectedBuild {
     BuildPayload aggregate;
     std::map<std::string, std::vector<std::pair<Hash8, Hash8>>> definitions;
     std::map<std::string, BuildPayload> bundles;
+    BuildPayload boot_carrier;
     JsonValue manifest;
     std::map<fs::path, Bytes> package_outputs;
 };
@@ -3873,6 +4055,7 @@ static ExpectedBuild build_expected(const fs::path &game_root, const fs::path &s
     out.aggregate = validate_resources(payload_resources(out.assets), metadata);
     out.definitions = runtime_package_definitions(out.assets);
     out.bundles = build_asset_bundles(out.assets, metadata, out.definitions);
+    out.boot_carrier = build_boot_carrier(game_root, out.assets, out.package_outputs, stage_root, metadata);
     out.manifest = build_manifest(game_root, out.source_assets, out.aggregate, out.definitions, out.bundles.size());
     return out;
 }
@@ -3891,6 +4074,10 @@ static fs::path standalone_bundle_destination(const fs::path &game_root, const s
     return game_root / "bundle" / filename;
 }
 
+static fs::path boot_carrier_destination(const fs::path &game_root) {
+    return game_root / "bundle" / (std::string(STORAGE_BASE_BUNDLE) + ".patch_998");
+}
+
 static JsonValue make_state(
     const std::vector<AssetSpec> &assets,
     const BuildPayload &aggregate,
@@ -3900,7 +4087,7 @@ static JsonValue make_state(
     JsonValue state = JsonValue::object_value();
     state.set("schema", JsonValue::integer_value(STATE_SCHEMA));
     state.set("custom_assets_version", JsonValue::string_value(VERSION));
-    state.set("transport", JsonValue::string_value("per_asset_registered_bundles_package_registry"));
+    state.set("transport", JsonValue::string_value("boot_assets_package_residency"));
     state.set("asset_count", JsonValue::integer_value(static_cast<i64>(assets.size())));
     state.set("resource_count", JsonValue::integer_value(static_cast<i64>(aggregate.resources.size())));
     JsonValue bundle_rows = JsonValue::array_value();
@@ -4026,6 +4213,7 @@ static void verify_exact(
     const BuildPayload &aggregate,
     const std::map<std::string, std::vector<std::pair<Hash8, Hash8>>> &definitions,
     const std::map<std::string, BuildPayload> &bundles,
+    const BuildPayload &boot_carrier,
     const JsonValue &manifest,
     const JsonValue &state,
     const Bytes &expected_db,
@@ -4035,6 +4223,8 @@ static void verify_exact(
     std::vector<std::string> problems;
     const Bytes db = read_file(layout.db);
     if (db != expected_db) problems.push_back("bundle_database.data does not match the planned transaction");
+    if (boot_registration_count(db) != 1) problems.push_back("boot carrier patch registration differs");
+    if (!file_equals_bytes(boot_carrier_destination(game_root), boot_carrier.patch_bytes)) problems.push_back("boot carrier patch differs");
     for (const auto &item : bundles) {
         if (bundle_registration_count(db, item.first) != 1) problems.push_back("generated bundle registration differs: " + item.first);
         if (!file_equals_bytes(standalone_bundle_destination(game_root, item.first), item.second.patch_bytes)) problems.push_back("generated bundle differs: bundle/" + item.first);
@@ -4110,8 +4300,10 @@ static int write_build(const fs::path &game_root, bool dry_run = false) {
     const std::set<std::string> recovered_packages = recover_generated_package_ownership(db_data, package_names);
     std::set<std::string> managed_packages = old_packages;
     managed_packages.insert(recovered_packages.begin(), recovered_packages.end());
-    ReconcileResult package_result = reconcile_package_registrations(bundle_result.data, build.definitions, managed_packages);
+    ReconcileResult package_result = reconcile_package_registrations(ensure_boot_registration(bundle_result.data), build.definitions, managed_packages);
     const Bytes new_db = package_result.data;
+    const fs::path boot_path = boot_carrier_destination(game_root);
+    const bool changed_boot = !file_equals_bytes(boot_path, build.boot_carrier.patch_bytes);
 
     std::map<std::string, fs::path> desired_streams;
     for (const auto &item : build.aggregate.stream_sources) desired_streams[item.first] = stream_destination(game_root, item.first);
@@ -4141,6 +4333,7 @@ static int write_build(const fs::path &game_root, bool dry_run = false) {
     for (const auto &item : build.package_outputs) if (!file_equals_bytes(item.first, item.second)) changed_package_outputs[item.first] = item.second;
     std::vector<fs::path> paths_to_write;
     for (const auto &name : changed_bundles) paths_to_write.push_back(desired_bundle_paths.at(name));
+    if (changed_boot) paths_to_write.push_back(boot_path);
     for (const auto &name : changed_streams) paths_to_write.push_back(desired_streams.at(name));
     for (const auto &item : changed_package_outputs) paths_to_write.push_back(item.first);
     if (!file_equals_bytes(build.layout.manifest_json, manifest_json)) paths_to_write.push_back(build.layout.manifest_json);
@@ -4162,6 +4355,7 @@ static int write_build(const fs::path &game_root, bool dry_run = false) {
             atomic_write(destination, build.bundles.at(name).patch_bytes);
             set_bundle_timestamp(destination, build_filetime);
         }
+        if (changed_boot) atomic_write(boot_path, build.boot_carrier.patch_bytes);
         for (const auto &name : changed_streams) atomic_copy(build.aggregate.stream_sources.at(name), desired_streams.at(name));
         for (const auto &item : changed_package_outputs) atomic_write(item.first, item.second);
         if (new_db != db_data) atomic_write(build.layout.db, new_db);
@@ -4169,7 +4363,7 @@ static int write_build(const fs::path &game_root, bool dry_run = false) {
         if (!file_equals_bytes(build.layout.manifest_lua, manifest_lua)) atomic_write(build.layout.manifest_lua, manifest_lua);
         remove_paths_exact(stale_paths);
         if (!file_equals_bytes(build.layout.state, state_bytes)) atomic_write(build.layout.state, state_bytes);
-        verify_exact(game_root, build.layout, build.aggregate, build.definitions, build.bundles, build.manifest, state, new_db, build.package_outputs, stale_paths);
+        verify_exact(game_root, build.layout, build.aggregate, build.definitions, build.bundles, build.boot_carrier, build.manifest, state, new_db, build.package_outputs, stale_paths);
     } catch (const std::exception &exc) {
         std::vector<std::string> rollback_problems;
         try {

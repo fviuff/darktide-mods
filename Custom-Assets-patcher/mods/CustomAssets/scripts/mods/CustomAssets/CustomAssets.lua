@@ -1,6 +1,6 @@
 local mod = get_mod("CustomAssets")
 
-mod.VERSION = "1.0.0-public"
+mod.VERSION = "1.0.1"
 mod.API_VERSION = 1
 
 local MANIFEST_PATH = "CustomAssets/generated/manifest"
