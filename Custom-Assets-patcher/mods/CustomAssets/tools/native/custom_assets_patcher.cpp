@@ -4303,6 +4303,10 @@ static int write_build(const fs::path &game_root, bool dry_run = false) {
     ReconcileResult package_result = reconcile_package_registrations(ensure_boot_registration(bundle_result.data), build.definitions, managed_packages);
     const Bytes new_db = package_result.data;
     const fs::path boot_path = boot_carrier_destination(game_root);
+<<<<<<< HEAD
+=======
+    if (fs::exists(boot_path) && boot_registration_count(db_data) != 1) throw PatcherError("refusing to overwrite an unregistered boot carrier patch");
+>>>>>>> afb3594d3759ea13a71b511ced004c18e0fbcf9b
     const bool changed_boot = !file_equals_bytes(boot_path, build.boot_carrier.patch_bytes);
 
     std::map<std::string, fs::path> desired_streams;
