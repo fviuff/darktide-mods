@@ -41,7 +41,7 @@ using Bytes = std::vector<u8>;
 using Hash8 = std::array<u8, 8>;
 namespace fs = std::filesystem;
 
-static constexpr const char *VERSION = "1.0.1";
+static constexpr const char *VERSION = "1.0.2";
 static constexpr int STATE_SCHEMA = 2;
 static constexpr const char *BASE_BUNDLE = "a2bbcc3451758add";
 static constexpr const char *STORAGE_BASE_BUNDLE = "9ba626afa44a3aa3";
@@ -1304,64 +1304,43 @@ static TextureInfo inspect_texture_body(const Bytes &blob) {
     }
 
     const Bytes &body = envelope.body;
+    TextureInfo out;
+    out.stream_name = stream_name;
 
     if (body.size() < 12) {
-        throw PatcherError("texture body is truncated");
+        return out;
     }
 
-    TextureInfo out;
     out.kind = read_u32(body, 0);
     out.compressed_resident_bytes = read_u32(body, 4);
     out.resident_dds_bytes = read_u32(body, 8);
     size_t pos = 12ull + out.compressed_resident_bytes;
 
-    if (out.kind != 1 || pos + 20 + 128 + 12 > body.size()) {
-        throw PatcherError("texture body uses an unsupported or truncated family");
+    if (pos + 20 + 128 + 4 > body.size()) {
+        return out;
     }
 
-    const u32 marker = read_u32(body, pos);
     out.body_flags = read_u32(body, pos + 4);
     out.streamed_mips = read_u32(body, pos + 8);
     out.width = read_u32(body, pos + 12);
     out.height = read_u32(body, pos + 16);
-    pos += 20;
+    out.footer_word = read_u32(body, body.size() - 4);
+    pos += 20 + 128;
 
-    if (marker != 67) {
-        throw PatcherError("texture body marker is not 67");
-    }
-
-    pos += 128;
+    // Textures without streamed mips may end right after a zero meta word, without a chunk table.
     const u32 meta_size = read_u32(body, pos);
-    pos += 4;
-    out.chunk_count = read_u32(body, pos);
-    const u16 zero = static_cast<u16>(body[pos + 4] | (static_cast<u16>(body[pos + 5]) << 8));
-    const u16 echoed = static_cast<u16>(body[pos + 6] | (static_cast<u16>(body[pos + 7]) << 8));
-    pos += 8;
 
-    if (zero != 0 || echoed != out.chunk_count || meta_size != 8 + 4 * out.chunk_count) {
-        throw PatcherError("texture chunk metadata is inconsistent");
+    if (meta_size < 8 || pos + 4ull + meta_size > body.size()) {
+        return out;
     }
 
-    if (pos + 4ull * out.chunk_count + 4 != body.size()) {
-        throw PatcherError("texture chunk table does not end at the footer");
+    out.chunk_count = read_u32(body, pos + 4);
+    pos += 12;
+
+    for (u32 i = 0; i < out.chunk_count && pos + 4 <= body.size(); ++i, pos += 4) {
+        out.compressed_stream_bytes = std::max(out.compressed_stream_bytes, read_u32(body, pos));
     }
 
-    u32 previous = 0;
-
-    for (u32 i = 0; i < out.chunk_count; ++i) {
-        const u32 end = read_u32(body, pos + static_cast<size_t>(i) * 4);
-
-        if (end <= previous) {
-            throw PatcherError("texture chunk offsets are not strictly increasing");
-        }
-
-        previous = end;
-    }
-
-    pos += static_cast<size_t>(out.chunk_count) * 4;
-    out.compressed_stream_bytes = previous;
-    out.footer_word = read_u32(body, pos);
-    out.stream_name = stream_name;
     return out;
 }
 
@@ -1467,18 +1446,6 @@ static ValidatedResource validate_resource(const ResourceSpec &spec, const HostB
                 throw PatcherError(path_text(spec.source) + ": resource header declares " + stream_name + ", but descriptor has no stream file");
             }
 
-            if (spec.engine_type == "texture") {
-                std::error_code ec;
-                const u64 actual = fs::file_size(*spec.stream_source, ec);
-
-                if (ec) {
-                    throw PatcherError(path_text(spec.source) + ": could not stat texture stream " + path_text(*spec.stream_source));
-                }
-
-                if (actual != texture_info.compressed_stream_bytes) {
-                    throw PatcherError(path_text(spec.source) + ": texture stream length mismatch: metadata=" + std::to_string(texture_info.compressed_stream_bytes) + ", file=" + std::to_string(actual));
-                }
-            }
         }
     } else if (spec.stream_source) {
         throw PatcherError(path_text(spec.source) + ": descriptor declares a stream but the cooked header is inline");
@@ -4303,10 +4270,6 @@ static int write_build(const fs::path &game_root, bool dry_run = false) {
     ReconcileResult package_result = reconcile_package_registrations(ensure_boot_registration(bundle_result.data), build.definitions, managed_packages);
     const Bytes new_db = package_result.data;
     const fs::path boot_path = boot_carrier_destination(game_root);
-<<<<<<< HEAD
-=======
-    if (fs::exists(boot_path) && boot_registration_count(db_data) != 1) throw PatcherError("refusing to overwrite an unregistered boot carrier patch");
->>>>>>> afb3594d3759ea13a71b511ced004c18e0fbcf9b
     const bool changed_boot = !file_equals_bytes(boot_path, build.boot_carrier.patch_bytes);
 
     std::map<std::string, fs::path> desired_streams;

@@ -7,7 +7,7 @@ return {
             mod_localization = "CustomAssets/scripts/mods/CustomAssets/CustomAssets_localization",
         })
     end,
-    version = "1.0.0-public",
+    version = "1.0.2,
     require = {},
     load_after = {},
     packages = {},
