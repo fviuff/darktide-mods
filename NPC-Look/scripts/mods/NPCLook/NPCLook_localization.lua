@@ -1,378 +1,13 @@
 return {
-    command_empty = {
-        en = "leave a slot explicitly empty: /npclook_empty <slot>",
-        ru = "оставьте слот явно пустым: /npclook_empty <слот>",
-        ["zh-cn"] = "将指定槽位置空：/npclook_empty <槽位>",
-    },
-    command_export = {
-        en = "export the current visual look",
-        ru = "экспортировать текущий визуальный образ",
-        ["zh-cn"] = "导出当前外观配置",
-    },
-    command_find = {
-        en = "search items: /npclook_find <filter> [slot_filter]",
-        ru = "поиск предметов: /npclook_find <фильтр> [фильтр_слота]",
-        ["zh-cn"] = "搜索物品：/npclook_find <关键词> [槽位筛选]",
-    },
-    command_fullhide = {
-        en = "hide entire character",
-        ru = "скрыть всего персонажа",
-        ["zh-cn"] = "隐藏整个人物模型",
-    },
-    command_hide = {
-        en = "hide slot: /npclook_hide <slot>",
-        ru = "скрыть слот: /npclook_hide <слот>",
-        ["zh-cn"] = "隐藏槽位：/npclook_hide <槽位>",
-    },
-    command_inspect = {
-        en = "inspect item: /npclook_inspect <item>",
-        ru = "осмотреть предмет: /npclook_inspect <предмет>",
-        ["zh-cn"] = "检视物品：/npclook_inspect <物品>",
-    },
-    command_load = {
-        en = "wear an exported look: /npclook_load <code>",
-        ru = "надеть экспортированный образ: /npclook_load <код>",
-        ["zh-cn"] = "载入导出外观：/npclook_load <代码>",
-    },
-    command_load_alias = {
-        en = "alias for /npclook_load",
-        ru = "псевдоним для /npclook_load",
-        ["zh-cn"] = "/npclook_load 的别名指令",
-    },
     command_open = {
-        en = "open NPC Look",
-        ru = "открыть окно NPC Look",
-        ["zh-cn"] = "打开NPC外观编辑器",
-    },
-    command_outfit = {
-        en = "preset or filter: /npclook_outfit <name>",
-        ru = "пресет или фильтр: /npclook_outfit <имя>",
-        ["zh-cn"] = "加载预设外观：/npclook_outfit <名称>",
-    },
-    command_presets = {
-        en = "list presets",
-        ru = "список пресетов",
-        ["zh-cn"] = "列出所有预设",
-    },
-    command_refresh = {
-        en = "reapply the current look",
-        ru = "применить текущий образ заново",
-        ["zh-cn"] = "重新应用当前外观",
-    },
-    command_replace = {
-        en = "full model replace: /npclook_replace <name>",
-        ru = "полная замена модели: /npclook_replace <имя>",
-        ["zh-cn"] = "完整替换模型：/npclook_replace <模型名>",
-    },
-    command_reset = {
-        en = "restore the original look",
-        ru = "восстановить исходный образ",
-        ["zh-cn"] = "恢复原始外观",
-    },
-    command_show = {
-        en = "restore slot: /npclook_show <slot>",
-        ru = "восстановить слот: /npclook_show <слот>",
-        ["zh-cn"] = "恢复槽位显示：/npclook_show <槽位>",
-    },
-    command_status = {
-        en = "mod state",
-        ru = "состояние мода",
-        ["zh-cn"] = "查看模组运行状态",
-    },
-    command_wear = {
-        en = "wear item: /npclook_wear <slot> <item>",
-        ru = "надеть предмет: /npclook_wear <слот> <предмет>",
-        ["zh-cn"] = "穿戴物品：/npclook_wear <槽位> <物品>",
-    },
-    command_wear_alias = {
-        en = "alias for /npclook_wear <slot> <item>",
-        ru = "псевдоним для /npclook_wear <слот> <предмет>",
-        ["zh-cn"] = "/npclook_wear 的别名指令",
-    },
-    echo_applied_slots = {
-        en = "Applied %d slot(s)",
-        ru = "Применено %d слотов",
-        ["zh-cn"] = "已应用 %d 个槽位",
-    },
-    echo_apply_failed = {
-        en = "Look apply failed: %s",
-        ru = "Ошибка применения образа: %s",
-        ["zh-cn"] = "外观应用失败：%s",
-    },
-    echo_auto_slot = {
-        en = " -> %s%s",
-        ru = " -> %s%s",
-        ["zh-cn"] = " -> %s%s",
-    },
-    echo_auto_slot_from = {
-        en = " (from %s)",
-        ru = " (из %s)",
-        ["zh-cn"] = "（源自 %s）",
-    },
-    echo_bad_slot = {
-        en = "Bad slot: %s",
-        ru = "Неверный слот: %s",
-        ["zh-cn"] = "无效槽位：%s",
-    },
-    echo_character_hidden = {
-        en = "Character hidden",
-        ru = "Персонаж скрыт",
-        ["zh-cn"] = "人物已隐藏",
-    },
-    echo_code = {
-        en = "NPC Look code:",
-        ru = "Код NPC Look:",
-        ["zh-cn"] = "NPC外观代码：",
-    },
-    echo_code_copied = {
-        en = "NPC Look code copied to the clipboard:",
-        ru = "Код NPC Look скопирован в буфер обмена:",
-        ["zh-cn"] = "NPC外观代码已复制至剪贴板：",
-    },
-    echo_code_failed = {
-        en = "NPC Look code failed: %s",
-        ru = "Ошибка кода NPC Look: %s",
-        ["zh-cn"] = "外观代码处理失败：%s",
-    },
-    echo_code_loaded = {
-        en = "Loaded NPC Look code: %d entries",
-        ru = "Загружен код NPC Look: %d записей",
-        ["zh-cn"] = "外观代码载入完成，共 %d 项配置",
-    },
-    echo_empty = {
-        en = "Empty: %s",
-        ru = "Пусто: %s",
-        ["zh-cn"] = "置空：%s",
-    },
-    echo_empty_failed = {
-        en = "Empty failed: %s",
-        ru = "Ошибка очистки: %s",
-        ["zh-cn"] = "置空操作失败：%s",
-    },
-    echo_empty_list = {
-        en = "Empty: %s",
-        ru = "Пусто: %s",
-        ["zh-cn"] = "置空：%s",
-    },
-    echo_equip_failed = {
-        en = "NPC Look equip failed: %s",
-        ru = "Ошибка экипировки NPC Look: %s",
-        ["zh-cn"] = "物品穿戴失败：%s",
-    },
-    echo_export_failed = {
-        en = "Could not export NPC Look: %s",
-        ru = "Не удалось экспортировать NPC Look: %s",
-        ["zh-cn"] = "无法导出外观配置：%s",
-    },
-    echo_full_hide_failed = {
-        en = "Full hide failed: %s",
-        ru = "Ошибка полного скрытия: %s",
-        ["zh-cn"] = "整体隐藏失败：%s",
-    },
-    echo_hidden = {
-        en = "Hidden: %s",
-        ru = "Скрыто: %s",
-        ["zh-cn"] = "已隐藏：%s",
-    },
-    echo_hidden_list = {
-        en = "Hidden: %s",
-        ru = "Скрыто: %s",
-        ["zh-cn"] = "已隐藏：%s",
-    },
-    echo_hide_failed = {
-        en = "Hide failed: %s",
-        ru = "Ошибка скрытия: %s",
-        ["zh-cn"] = "隐藏操作失败：%s",
-    },
-    echo_inspect_field = {
-        en = " %s: %s",
-        ru = " %s: %s",
-        ["zh-cn"] = " %s：%s",
-    },
-    echo_item = {
-        en = "Item: %s",
-        ru = "Предмет: %s",
-        ["zh-cn"] = "物品：%s",
-    },
-    echo_match_count = {
-        en = "%d matches for '%s':",
-        ru = "%d совпадений для '%s':",
-        ["zh-cn"] = "关键词「%s」匹配到 %d 条结果：",
-    },
-    echo_match_row = {
-        en = " %s [%s]",
-        ru = " %s [%s]",
-        ["zh-cn"] = " %s [%s]",
-    },
-    echo_missing = {
-        en = "Missing: %s",
-        ru = "Отсутствует: %s",
-        ["zh-cn"] = "缺失：%s",
-    },
-    echo_no_auto_slot = {
-        en = " -> no auto-slot for '%s'; use /npclook_wear <slot> <item>",
-        ru = " -> нет автоматического слота для '%s'; используйте /npclook_wear <слот> <предмет>",
-        ["zh-cn"] = " ->「%s」无自动匹配槽位，请使用 /npclook_wear <槽位> <物品>",
-    },
-    echo_no_changes = {
-        en = "No changes",
-        ru = "Нет изменений",
-        ["zh-cn"] = "未产生任何改动",
-    },
-    echo_no_destination = {
-        en = "No destination was supplied and the item has no usable slot hint",
-        ru = "Не указан слот назначения, и у предмета нет подсказки по слоту",
-        ["zh-cn"] = "未指定目标槽位，且该物品无可用槽位信息",
-    },
-    echo_no_match = {
-        en = "No match for '%s'",
-        ru = "Нет совпадений для '%s'",
-        ["zh-cn"] = "未找到匹配「%s」的内容",
-    },
-    echo_no_matches = {
-        en = "No matches",
-        ru = "Нет совпадений",
-        ["zh-cn"] = "无匹配结果",
-    },
-    echo_nothing_reset = {
-        en = "Nothing to reset",
-        ru = "Нечего сбрасывать",
-        ["zh-cn"] = "没有需要重置的内容",
-    },
-    echo_outfit = {
-        en = "Outfit",
-        ru = "Наряд",
-        ["zh-cn"] = "外观套装",
-    },
-    echo_outfit_applied = {
-        en = "%s applied: %d slot(s)",
-        ru = "%s применён: %d слотов",
-        ["zh-cn"] = "套装「%s」已应用，共 %d 个槽位",
-    },
-    echo_outfit_failed = {
-        en = "Outfit failed: %s",
-        ru = "Ошибка наряда: %s",
-        ["zh-cn"] = "套装加载失败：%s",
-    },
-    echo_override_row = {
-        en = " %s -> %s",
-        ru = " %s -> %s",
-        ["zh-cn"] = " %s -> %s",
-    },
-    echo_overrides = {
-        en = "Overrides:",
-        ru = "Переопределения:",
-        ["zh-cn"] = "覆盖配置：",
-    },
-    echo_preset = {
-        en = "Preset",
-        ru = "Пресет",
-        ["zh-cn"] = "预设",
-    },
-    echo_presets = {
-        en = "Presets: %s",
-        ru = "Пресеты: %s",
-        ["zh-cn"] = "可用预设：%s",
-    },
-    echo_refine = {
-        en = "refine or use nexusmods.com/warhammer40kdarktide/mods/822 to export master_items.",
-        ru = " ...уточните или используйте мод Sigismund для экспорта master_items",
-        ["zh-cn"] = " …优化搜索条件，或使用nexusmods.com/warhammer40kdarktide/mods/822导出 master_items",
-    },
-    echo_refresh_failed = {
-        en = "Refresh failed: %s",
-        ru = "Ошибка обновления: %s",
-        ["zh-cn"] = "刷新失败：%s",
-    },
-    echo_refreshed = {
-        en = "Refreshed",
-        ru = "Обновлено",
-        ["zh-cn"] = "刷新完成",
-    },
-    echo_replace_failed = {
-        en = "Replace failed: %s",
-        ru = "Ошибка замены: %s",
-        ["zh-cn"] = "模型替换失败：%s",
-    },
-    echo_replaced = {
-        en = "Replaced: %d equipped",
-        ru = "Заменено: %d экипировано",
-        ["zh-cn"] = "替换完成，已载入 %d 件物品",
-    },
-    echo_reset = {
-        en = "Reset",
-        ru = "Сброшено",
-        ["zh-cn"] = "已重置",
-    },
-    echo_restore_failed = {
-        en = "Restore failed: %s",
-        ru = "Ошибка восстановления: %s",
-        ["zh-cn"] = "恢复操作失败：%s",
-    },
-    echo_restored = {
-        en = "Restored: %s",
-        ru = "Восстановлено: %s",
-        ["zh-cn"] = "已恢复：%s",
-    },
-    echo_showing = {
-        en = "Showing %d of %d for '%s':",
-        ru = "Показано %d из %d для '%s':",
-        ["zh-cn"] = "关键词「%s」，展示 %d / %d 条结果：",
-    },
-    echo_usage_empty = {
-        en = "Usage: /npclook_empty <slot>",
-        ru = "Использование: /npclook_empty <слот>",
-        ["zh-cn"] = "用法：/npclook_empty <槽位>",
-    },
-    echo_usage_find = {
-        en = "Usage: /npclook_find <filter> [slot_filter]",
-        ru = "Использование: /npclook_find <фильтр> [фильтр_слота]",
-        ["zh-cn"] = "用法：/npclook_find <关键词> [槽位筛选]",
-    },
-    echo_usage_hide = {
-        en = "Usage: /npclook_hide <slot>",
-        ru = "Использование: /npclook_hide <слот>",
-        ["zh-cn"] = "用法：/npclook_hide <槽位>",
-    },
-    echo_usage_inspect = {
-        en = "Usage: /npclook_inspect <item>",
-        ru = "Использование: /npclook_inspect <предмет>",
-        ["zh-cn"] = "用法：/npclook_inspect <物品>",
-    },
-    echo_usage_load = {
-        en = "Usage: /npclook_load <NPCL look code>",
-        ru = "Использование: /npclook_load <код NPC Look>",
-        ["zh-cn"] = "用法：/npclook_load <外观代码>",
-    },
-    echo_usage_outfit = {
-        en = "Usage: /npclook_outfit <name>",
-        ru = "Использование: /npclook_outfit <имя>",
-        ["zh-cn"] = "用法：/npclook_outfit <套装名称>",
-    },
-    echo_usage_replace = {
-        en = "Usage: /npclook_replace <name>",
-        ru = "Использование: /npclook_replace <имя>",
-        ["zh-cn"] = "用法：/npclook_replace <模型名称>",
-    },
-    echo_usage_show = {
-        en = "Usage: /npclook_show <slot>",
-        ru = "Использование: /npclook_show <слот>",
-        ["zh-cn"] = "用法：/npclook_show <槽位>",
-    },
-    echo_usage_wear = {
-        en = "Usage: /npclook_wear <slot> <item> or /npclook_wear <item>",
-        ru = "Использование: /npclook_wear <слот> <предмет> или /npclook_wear <предмет>",
-        ["zh-cn"] = "用法：/npclook_wear <槽位> <物品> 或 /npclook_wear <物品>",
-    },
-    echo_wearing = {
-        en = "Wearing %s in %s",
-        ru = "Надето %s в %s",
-        ["zh-cn"] = "槽位「%s」穿戴物品：%s",
+        en = "open the Studio",
+        ru = "открыть студию",
+        ["zh-cn"] = "打开外观编辑器",
     },
     error_bridge_not_ready = {
-        en = "NPC Look is not ready.",
-        ru = "NPC Look не готов.",
-        ["zh-cn"] = "NPC外观编辑器尚未就绪",
+        en = "Studio is not ready.",
+        ru = "Студия не готова.",
+        ["zh-cn"] = "编辑器尚未就绪",
     },
     error_code_duplicate = {
         en = "duplicate slot in look code: %s",
@@ -430,9 +65,9 @@ return {
         ["zh-cn"] = "外观代码存在未知条目",
     },
     error_code_version = {
-        en = "not an NPCL look code",
-        ru = "не является кодом NPCL Look",
-        ["zh-cn"] = "该文本并非合法NPC外观代码",
+        en = "not a look code",
+        ru = "не является кодом образа",
+        ["zh-cn"] = "该文本并非合法外观代码",
     },
     error_expected_item = {
         en = "%s expected %s",
@@ -449,11 +84,6 @@ return {
         ru = "неверный скрытый слот: %s",
         ["zh-cn"] = "无法隐藏无效槽位：%s",
     },
-    error_invalid_slot = {
-        en = "invalid slot",
-        ru = "неверный слот",
-        ["zh-cn"] = "无效槽位",
-    },
     error_invalid_slot_value = {
         en = "invalid slot: %s",
         ru = "неверный слот: %s",
@@ -463,11 +93,6 @@ return {
         en = "item instance is nil",
         ru = "экземпляр предмета равен nil",
         ["zh-cn"] = "物品实例为空",
-    },
-    error_item_not_found = {
-        en = "item not found",
-        ru = "предмет не найден",
-        ["zh-cn"] = "未找到目标物品",
     },
     error_live_package_acquire = {
         en = "could not retain live cosmetic package %s: %s",
@@ -514,35 +139,15 @@ return {
         ru = "%s: отсутствует предмет %s",
         ["zh-cn"] = "槽位%s：缺少物品 %s",
     },
-    error_missing_outfit = {
-        en = "missing outfit name",
-        ru = "отсутствует имя наряда",
-        ["zh-cn"] = "未填写套装名称",
-    },
     error_no_local_player = {
         en = "No local player",
         ru = "Нет локального игрока",
         ["zh-cn"] = "不存在本地玩家实体",
     },
-    error_no_valid_slots = {
-        en = "no valid slots",
-        ru = "нет допустимых слотов",
-        ["zh-cn"] = "无可用有效槽位",
-    },
-    error_nothing_matched = {
-        en = "nothing matched",
-        ru = "ничего не найдено",
-        ["zh-cn"] = "未匹配任何内容",
-    },
     error_outfit_no_pieces = {
         en = "outfit has no usable pieces",
         ru = "в наряде нет полезных частей",
         ["zh-cn"] = "该套装不含可用部件",
-    },
-    error_see_console = {
-        en = "NPC Look could not %s. Check the console log for details.",
-        ru = "NPC Look не удалось %s. Проверьте журнал консоли для подробностей.",
-        ["zh-cn"] = "NPC外观编辑器无法%s，详情查看控制台日志。",
     },
     error_restore_removed = {
         en = "could not restore removed slots",
@@ -645,8 +250,8 @@ return {
         ["zh-cn"] = "选择槽位与部件，随后应用外观配置。",
     },
     feedback_inspect_off = {
-        en = "Back to NPC Look",
-        ru = "Назад к NPC Look",
+        en = "Back to the Studio",
+        ru = "Назад в студию",
         ["zh-cn"] = "返回外观编辑器",
     },
     feedback_inspect_on = {
@@ -823,41 +428,6 @@ return {
         en = "unknown error",
         ru = "неизвестная ошибка",
         ["zh-cn"] = "未知错误",
-    },
-    inspect_attachments = {
-        en = "attachments",
-        ru = "вложения",
-        ["zh-cn"] = "附属组件",
-    },
-    inspect_attach_node = {
-        en = "attach node",
-        ru = "узел крепления",
-        ["zh-cn"] = "挂载节点",
-    },
-    inspect_base_unit = {
-        en = "base unit",
-        ru = "базовая единица",
-        ["zh-cn"] = "基础模型",
-    },
-    inspect_children = {
-        en = "children",
-        ru = "дочерние",
-        ["zh-cn"] = "子组件",
-    },
-    inspect_hide_slots = {
-        en = "hide slots",
-        ru = "скрытые слоты",
-        ["zh-cn"] = "隐藏槽位",
-    },
-    inspect_material_overrides = {
-        en = "material overrides",
-        ru = "переопределения материалов",
-        ["zh-cn"] = "材质覆盖",
-    },
-    inspect_slots = {
-        en = "slots",
-        ru = "слоты",
-        ["zh-cn"] = "槽位列表",
     },
     mod_description = {
         en = "Equip and search for any item. Preview NPC outfits, mix individual pieces, hide or replace slots, and share presets with importable codes. Use /npclook_ui to open ui.",
@@ -1600,10 +1170,6 @@ return {
         en = "SHOW IN FIRST PERSON",
         ["zh-cn"] = "第一人称显示",
     },
-    error_extra_first_person_unavailable = {
-        en = "The first-person visual could not be created for this extra slot",
-        ["zh-cn"] = "该附加部位无法生成第一人称模型",
-    },
     ui_mask_off = {
         en = "OFF",
         ["zh-cn"] = "关闭",
@@ -1706,9 +1272,6 @@ return {
     feedback_slot_cloned = {
         en = "Cloned to %s",
     },
-    inspect_opacity = {
-        en = "Opacity",
-    },
     ui_clone_slot = {
         en = "CLONE SLOT",
     },
@@ -1734,7 +1297,195 @@ return {
         en = "First-person animation updated",
     },
     ui_extra_animate_first_person = {
-        en = "ANIMATE IN FIRST PERSON",
+        en = "DO NOT TOUCH",
     },
-
+    studio_text_group = {
+        en = "Studio Text",
+    },
+    studio_font = {
+        en = "Font",
+    },
+    studio_font_description = {
+        en = "Font used for Studio labels, buttons and inputs.",
+    },
+    studio_font_machine_medium = {
+        en = "Machine (default)",
+    },
+    studio_font_proxima_nova_bold = {
+        en = "Proxima Nova Bold",
+    },
+    studio_font_proxima_nova_medium = {
+        en = "Proxima Nova Medium",
+    },
+    studio_font_itc_novarese_medium = {
+        en = "Novarese Medium",
+    },
+    studio_font_itc_novarese_bold = {
+        en = "Novarese Bold",
+    },
+    studio_font_mono_tide_medium = {
+        en = "Mono Tide",
+    },
+    studio_font_friz_quadrata = {
+        en = "Friz Quadrata",
+    },
+    studio_font_arial = {
+        en = "Arial",
+    },
+    studio_text_scale = {
+        en = "Text Size (%%)",
+    },
+    studio_text_scale_description = {
+        en = "Scales every Studio text. The layout keeps its size, so large values can clip long labels.",
+    },
+    loadout_button_group = {
+        en = "Loadout Look Button",
+    },
+    loadout_button_visible = {
+        en = "Show In Inventory",
+    },
+    loadout_button_visible_description = {
+        en = "Hiding the button keeps existing loadout pins active.",
+    },
+    loadout_button_x = {
+        en = "Horizontal Position",
+    },
+    loadout_button_y = {
+        en = "Vertical Position",
+    },
+    loadout_button_y_description = {
+        en = "The list shortens itself when it would run off screen.",
+    },
+    ui_show = {
+        en = "SHOW",
+    },
+    ui_show_slot = {
+        en = "SHOW SLOT",
+    },
+    ui_full_show = {
+        en = "SHOW ALL",
+    },
+    feedback_shown_slot = {
+        en = "Slot shown",
+    },
+    feedback_full_show = {
+        en = "Every piece is visible again",
+    },
+    feedback_hide_nothing = {
+        en = "Nothing to hide in this slot",
+    },
+    ui_copy_slot = {
+        en = "COPY SLOT",
+    },
+    ui_paste_extra = {
+        en = "PASTE EXTRA",
+    },
+    ui_paste_into = {
+        en = "PASTE INTO",
+    },
+    feedback_slot_copied = {
+        en = "Copied %s",
+    },
+    feedback_slot_pasted = {
+        en = "Pasted into %s",
+    },
+    feedback_clipboard_empty = {
+        en = "Copy a slot first",
+    },
+    ui_mode_assets = {
+        en = "ASSETS",
+    },
+    ui_asset_unit = {
+        en = "CUSTOM UNIT",
+    },
+    ui_asset_texture = {
+        en = "CUSTOM TEXTURE",
+    },
+    ui_asset_material = {
+        en = "CUSTOM MATERIAL",
+    },
+    ui_asset_texture_slot = {
+        en = "TEXTURE SLOT",
+    },
+    ui_asset_material_slot = {
+        en = "MATERIAL SLOT",
+    },
+    ui_asset_no_slots = {
+        en = "NO KNOWN SLOTS",
+    },
+    feedback_assets_unavailable = {
+        en = "Install Custom Assets and run CUSTOM_ASSETS_PATCH.bat with Darktide closed",
+    },
+    feedback_asset_slot_missing = {
+        en = "No known slot can take this asset",
+    },
+    feedback_asset_slot = {
+        en = "Applying to %s",
+    },
+    ui_tab_look = {
+        en = "LOOK",
+    },
+    ui_tab_meshes = {
+        en = "MESHES",
+    },
+    ui_meshes_title = {
+        en = "MESHES",
+    },
+    ui_mesh = {
+        en = "MESH",
+    },
+    ui_mesh_base = {
+        en = "BASE",
+    },
+    ui_mesh_details = {
+        en = "%d MATERIALS   %d OVERRIDES",
+    },
+    ui_reset_meshes = {
+        en = "RESET MESHES",
+    },
+    ui_mesh_no_piece = {
+        en = "Select a slot with a piece",
+    },
+    ui_mesh_scanning = {
+        en = "Reading meshes from the preview",
+    },
+    ui_mesh_whole_piece = {
+        en = "WHOLE PIECE",
+    },
+    ui_mesh_help = {
+        en = "Select a mesh to give it its own materials from the library. Select it again to target the whole piece. HIDE only affects that mesh.",
+    },
+    feedback_look_tab = {
+        en = "Look",
+    },
+    feedback_meshes_tab = {
+        en = "Meshes",
+    },
+    feedback_mesh_selected = {
+        en = "Materials now target this mesh",
+    },
+    feedback_mesh_cleared = {
+        en = "Materials now target the whole piece",
+    },
+    feedback_mesh_hidden = {
+        en = "Mesh hidden",
+    },
+    feedback_mesh_shown = {
+        en = "Mesh shown",
+    },
+    feedback_meshes_reset = {
+        en = "Mesh changes reset",
+    },
+    error_no_target_player = {
+        en = "No target player",
+    },
+    error_target_is_local_player = {
+        en = "The local player uses the active look",
+    },
+    feedback_mesh_material_unsupported = {
+        en = "This material swaps whole materials and cannot target one mesh",
+    },
+    feedback_asset_slot_type_hint = {
+        en = "Type a slot name in the search box, then press +",
+    },
 }

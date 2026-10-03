@@ -20,7 +20,7 @@ if previous_extra_slot_runtime then
 
         pcall(shutdown)
     else
-        mod:warning("Older NPC Look visual ownership state was found. Unsafe hot-reload cleanup was skipped; restart Darktide to clear it.")
+        mod:warning("Older visual ownership state was found. Unsafe hot-reload cleanup was skipped; restart Darktide to clear it.")
     end
 end
 
@@ -46,6 +46,7 @@ rawset(mod, "npclook_raw_units_runtime", nil)
 rawset(mod, "npclook_raw_unit_registry", nil)
 rawset(mod, "npclook_raw_overlay_fallbacks", nil)
 rawset(mod, "npclook_raw_unit_state", nil)
+rawset(mod, "npclook_meshes_runtime", nil)
 
 local INSTANCE_GENERATION = (tonumber(rawget(mod, "npclook_instance_generation")) or 0) + 1
 rawset(mod, "npclook_instance_generation", INSTANCE_GENERATION)
@@ -53,6 +54,8 @@ rawset(mod, "npclook_instance_generation", INSTANCE_GENERATION)
 local util = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_util")
 local RAW_UNITS = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_raw_units")
 local MASKS = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_masks")
+local CUSTOM_ASSETS = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_custom_assets")
+local MESHES = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_meshes")
 local loc = util.localize
 
 rawset(mod, "npclook_extra_slot_runtime", nil)
@@ -82,7 +85,6 @@ local UnitSpawnerManager = require("scripts/foundation/managers/unit_spawner/uni
 -- Configuration and state
 
 local SLOT_CONFIG = PlayerCharacterConstants.slot_configuration
-local MAX_FIND_RESULTS = 150
 local VIEW_CONFIG = {
     studio_name = "npclook_studio_view",
     preview_name = "npclook_studio_preview_view",
@@ -118,6 +120,7 @@ local _look_state = {
     opacity = {},
     variants = {},
     masks = {},
+    meshes = {},
 }
 
 local EXTRA_SLOTS = {}
@@ -127,7 +130,6 @@ local _studio_view_registered = false
 local _studio_session
 local _master_items_cache
 local _master_items_cache_version
-local _item_cache_warning_shown = false
 local _studio_item_catalog
 local _bound_player_unit
 local _reapply_pending = false
@@ -151,6 +153,9 @@ local _startup_cleanup_elapsed = 0
 local _startup_cleanup_attempts = 0
 local STARTUP_CLEANUP_MAX_ATTEMPTS = 120
 local BINDING_POLL_INTERVAL = 0.25
+-- Generated units are tracked at equip time; this slower sweep only catches late native respawns.
+local PACKAGE_UNIT_REFRESH_INTERVAL = 2
+local _package_unit_refresh_elapsed = 0
 
 local function hook_method(target, method_name, callback)
     local method = target and target[method_name]
@@ -451,6 +456,24 @@ local _originals = {}
 local live_visual = {
     managed_slots = {},
 }
+
+-- The local player owns the module tables above. Companion mods dress other player
+-- units (Pilgrimage bots) through owner records, so their packages, originals and
+-- plans never mix with the local look.
+live_visual.owners = {
+    by_player = {},
+    by_unit = {},
+    count = 0,
+    poll_elapsed = 0,
+    local_record = {
+        state = _look_state,
+        originals = _originals,
+        package_loads = _live_package_loads,
+        pending_package_loads = _pending_live_package_loads,
+        managed_slots = live_visual.managed_slots,
+    },
+}
+live_visual.owners.current = live_visual.owners.local_record
 local _counter = 0
 local _raw_unit_spawn_warnings = {}
 local _raw_overlay_retry_requested = false
@@ -474,18 +497,11 @@ local function item_cache()
     local ok, cache = pcall(MasterItems.get_cached)
 
     if not ok or not cache then
-        if not _item_cache_warning_shown then
-            mod:echo(loc("error_master_cache_not_ready"))
-            _item_cache_warning_shown = true
-        end
-
         return nil
     elseif _master_items_cache == cache and version == _master_items_cache_version then
-        _item_cache_warning_shown = false
         return RAW_UNITS.install(cache)
     end
 
-    _item_cache_warning_shown = false
     _master_items_cache = cache
     _master_items_cache_version = version
     RAW_UNITS.install(cache)
@@ -505,12 +521,16 @@ local function item_definition(item_name)
         return nil
     end
 
+    if CUSTOM_ASSETS.is_material_item_name(item_name) then
+        return CUSTOM_ASSETS.ensure_material_item(cache, item_name), item_name
+    end
+
     local normalized = RAW_UNITS.normalize(item_name) or item_name
     local item = rawget(cache, normalized)
 
     if not item and RAW_UNITS.is_resource(normalized) then
         local added
-        item, added = RAW_UNITS.ensure(cache, normalized)
+        item, added = RAW_UNITS.ensure(cache, normalized, CUSTOM_ASSETS.unit_metadata(normalized))
 
         if added then
             invalidate_raw_catalog()
@@ -640,23 +660,60 @@ local function studio_item_catalog()
         families = {},
         family_items = {},
         materials = {},
+        texture_slots = {},
+        material_slots = {},
     }
     local family_lookup = {}
+    local texture_slot_counts = {}
+    local material_slot_counts = {}
+
+    local function has_visual_base(item)
+        if type(item.base_unit) == "string" and item.base_unit ~= "" then
+            return true
+        end
+
+        for _, base_unit in pairs(type(item.breed_base_unit) == "table" and item.breed_base_unit or {}) do
+            if type(base_unit) == "string" and base_unit ~= "" then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    local function count_override_slots(values, field, counts)
+        for _, value in pairs(type(values) == "table" and values or {}) do
+            local slot = type(value) == "table" and value[field]
+
+            if type(slot) == "string" and slot ~= "" and not string.find(slot, "/", 1, true) then
+                counts[slot] = (counts[slot] or 0) + 1
+            end
+        end
+    end
 
     for item_name, item in pairs(cache) do
-        -- Raw units live only in the Units tab.
-        if item.npclook_raw_unit ~= true then
+        -- Raw units live only in the Units tab and custom overrides only in Assets.
+        if item.npclook_raw_unit ~= true and item.npclook_custom_material ~= true then
             if EXTRA_SLOTS.is_material_override_item(item) then
                 catalog.materials[#catalog.materials + 1] = {
                     name = item_name,
                     sub = EXTRA_SLOTS.material_override_summary(item),
                     material_override = true,
                 }
+
+                -- Custom textures and materials reuse the slot names authored by Fatshark.
+                count_override_slots(item.texture_material_overrides, "texture_slot", texture_slot_counts)
+                count_override_slots(item.texture_material_overrides, "material_slot", material_slot_counts)
+                count_override_slots(item.material_overrides, "material_slot", material_slot_counts)
             end
 
             local slot_name, source_slot = target_slot_for_item(item)
             local authored_slot = first_slot(item)
-            local catalog_item = authored_slot ~= nil or item.base_unit ~= nil
+            -- Wearable 3D pieces only: no emotes, poses, frames or other UI items.
+            local catalog_item = (authored_slot ~= nil or item.base_unit ~= nil)
+                and not util.item_is_2d(item, item_name)
+                and not string.find(item_name, "/animations/", 1, true)
+                and (slot_name ~= nil or has_visual_base(item))
 
             if catalog_item then
                 local entry = {
@@ -710,6 +767,23 @@ local function studio_item_catalog()
     sort_entries(catalog.all)
     sort_entries(catalog.materials)
 
+    local function sorted_slots(counts, destination)
+        for slot in pairs(counts) do
+            destination[#destination + 1] = slot
+        end
+
+        table.sort(destination, function(a, b)
+            if counts[a] ~= counts[b] then
+                return counts[a] > counts[b]
+            end
+
+            return a < b
+        end)
+    end
+
+    sorted_slots(texture_slot_counts, catalog.texture_slots)
+    sorted_slots(material_slot_counts, catalog.material_slots)
+
     for _, entries in pairs(catalog.by_slot) do
         sort_entries(entries)
     end
@@ -755,298 +829,27 @@ end
 
 EXTRA_SLOTS.studio_extra_slot_page_size = 22
 
-EXTRA_SLOTS.command_slot_aliases = {
-    head = "slot_gear_head",
-    headgear = "slot_gear_head",
-    head_gear = "slot_gear_head",
-    face = "slot_body_face",
-    hair = "slot_body_hair",
-    hair_color = "slot_body_hair_color",
-    beard = "slot_body_face_hair",
-    face_hair = "slot_body_face_hair",
-    beard_color = "slot_body_face_hair_color",
-    face_hair_color = "slot_body_face_hair_color",
-    face_tattoo = "slot_body_face_tattoo",
-    face_scar = "slot_body_face_scar",
-    makeup = "slot_body_face_makeup",
-    eye_color = "slot_body_eye_color",
-    eye_color_secondary = "slot_body_eye_color_secondary",
-    skin_color = "slot_body_skin_color",
-    skin_color_secondary = "slot_body_skin_color_secondary",
-    skin_discoloration = "slot_body_skin_discoloration",
-    upper = "slot_gear_upperbody",
-    upperbody = "slot_gear_upperbody",
-    upper_body = "slot_gear_upperbody",
-    torso = "slot_body_torso",
-    arms = "slot_body_arms",
-    lower = "slot_gear_lowerbody",
-    lowerbody = "slot_gear_lowerbody",
-    lower_body = "slot_gear_lowerbody",
-    legs = "slot_body_legs",
-    body_tattoo = "slot_body_tattoo",
-    extra = "slot_gear_extra_cosmetic",
-    extra_cosmetic = "slot_gear_extra_cosmetic",
-    extra_slot = "slot_gear_extra_cosmetic",
-    decal = "slot_gear_material_override_decal",
-}
-
-function EXTRA_SLOTS.command_arguments(...)
-    local result = {}
-    local quoted = nil
-    local quoted_parts = {}
-
-    for i = 1, select("#", ...) do
-        local raw_value = select(i, ...)
-
-        if raw_value ~= nil then
-            local value = tostring(raw_value)
-
-            if quoted then
-                quoted_parts[#quoted_parts + 1] = value
-
-                if string.sub(value, -1) == quoted then
-                    local joined = table.concat(quoted_parts, " ")
-                    result[#result + 1] = string.sub(joined, 2, -2)
-                    quoted = nil
-                    table.clear(quoted_parts)
-                end
-            else
-                local first_character = string.sub(value, 1, 1)
-                local last_character = string.sub(value, -1)
-                local starts_quote = first_character == "\"" or first_character == "'"
-
-                if starts_quote and (#value == 1 or last_character ~= first_character) then
-                    quoted = first_character
-                    quoted_parts[1] = value
-                elseif starts_quote and #value >= 2 and last_character == first_character then
-                    result[#result + 1] = string.sub(value, 2, -2)
-                else
-                    result[#result + 1] = value
-                end
-            end
-        end
-    end
-
-    if quoted then
-        result[#result + 1] = table.concat(quoted_parts, " ")
-    end
-
-    return result
-end
-
-function EXTRA_SLOTS.command_join(arguments, first_index, last_index)
-    local parts = {}
-    local first = math.max(tonumber(first_index) or 1, 1)
-    local last = math.min(tonumber(last_index) or #(arguments or {}), #(arguments or {}))
-
-    for i = first, last do
-        local value = arguments and arguments[i]
-
-        if type(value) == "string" and value ~= "" then
-            parts[#parts + 1] = value
-        end
-    end
-
-    local value = table.concat(parts, " ")
-    value = string.match(value, "^%s*(.-)%s*$") or ""
-
-    if #value >= 2 then
-        local first_character = string.sub(value, 1, 1)
-        local last_character = string.sub(value, -1)
-
-        if (first_character == "\"" and last_character == "\"")
-            or (first_character == "'" and last_character == "'") then
-            value = string.sub(value, 2, -2)
-            value = string.match(value, "^%s*(.-)%s*$") or ""
-        end
-    end
-
-    return value ~= "" and value or nil
-end
-
-function EXTRA_SLOTS.resolve_command_slot(value, anchors)
-    if type(value) ~= "string" then
-        return nil
-    end
-
-    local normalized = string.lower(string.match(value, "^%s*(.-)%s*$") or "")
-    normalized = string.gsub(normalized, "[%s%-]+", "_")
-
-    if EXTRA_SLOTS.is_slot(normalized, anchors) or valid_look_slot(normalized) then
-        return normalized
-    end
-
-    local extra_number = string.match(normalized, "^extra_?(%d+)$")
-    local extra_id = extra_number and ("extra_" .. extra_number) or nil
-
-    if extra_id and EXTRA_SLOTS.is_slot(extra_id, anchors) then
-        return extra_id
-    end
-
-    local alias = EXTRA_SLOTS.command_slot_aliases[normalized]
-
-    if alias and valid_look_slot(alias) then
-        return alias
-    end
-
-    local resolved
-
-    for slot_name in pairs(LOOK_SLOTS) do
-        local candidates = {
-            slot_name,
-            (string.gsub(slot_name, "^slot_", "")),
-            (string.gsub(slot_name, "^slot_gear_", "")),
-            (string.gsub(slot_name, "^slot_body_", "")),
-        }
-
-        for i = 1, #candidates do
-            if candidates[i] == normalized then
-                if resolved and resolved ~= slot_name then
-                    return nil
-                end
-
-                resolved = slot_name
-                break
-            end
-        end
-    end
-
-    return resolved
-end
-
-function EXTRA_SLOTS.command_field_value(value)
-    if type(value) ~= "table" then
-        return tostring(value)
-    end
-
-    local item = value.item
-
-    if type(item) == "table" then
-        item = item.name
-    end
-
-    if type(item) == "string" and item ~= "" then
-        return item
-    elseif type(value.name) == "string" and value.name ~= "" then
-        return value.name
-    end
-
-    return "{...}"
-end
-
 mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_materials").install(EXTRA_SLOTS, {
     item_cache = item_cache,
+    ensure_item = CUSTOM_ASSETS.ensure_material_item,
     valid_look_slot = valid_look_slot,
     safe_unit_alive = util.safe_unit_alive,
+})
+
+MESHES.install({
+    normalize_materials = EXTRA_SLOTS.normalize_materials,
+    material_item_name = EXTRA_SLOTS.material_item_name,
+    material_override_item = function(definitions, item_name)
+        return EXTRA_SLOTS.material_override_item(definitions or item_cache() or {}, item_name)
+    end,
 })
 
 do
     local material_api_ok, material_api_error = extra_slot_runtime.install_material_api(EXTRA_SLOTS)
 
     if not material_api_ok then
-        error("NPC Look extra-slot material API installation failed: " .. tostring(material_api_error))
+        error("Extra-slot material API installation failed: " .. tostring(material_api_error))
     end
-end
-
-local function find_items(filter, require_slot)
-    local cache = item_cache()
-
-    if not cache then
-        return nil
-    end
-
-    filter = string.lower(filter)
-    local matches = {}
-
-    for name, item in pairs(cache) do
-        if string.find(string.lower(name), filter, 1, true) then
-            local slot_name = first_slot(item)
-
-            if slot_name or not require_slot then
-                matches[#matches + 1] = { name = name, item = item, slot = slot_name }
-            end
-        end
-    end
-
-    table.sort(matches, function(left, right)
-        return left.name < right.name
-    end)
-
-    return matches
-end
-
-local function find_item_candidates(filter)
-    local matches = find_items(filter, false)
-
-    if not matches then
-        return nil
-    end
-
-    local candidates = {}
-
-    for i = 1, #matches do
-        local match = matches[i]
-
-        if match.slot or match.item.base_unit then
-            candidates[#candidates + 1] = match
-        end
-    end
-
-    return candidates
-end
-
-local function resolve_item(input)
-    input = type(input) == "string" and (string.match(input, "^%s*(.-)%s*$") or "") or ""
-
-    if input == "" then
-        return nil
-    end
-
-    local cache = item_cache()
-
-    if not cache then
-        return nil
-    end
-
-    local exact_match, normalized = item_definition(input)
-
-    if exact_match then
-        return normalized or input, exact_match
-    end
-
-    local matches = find_item_candidates(input)
-
-    if not matches or #matches == 0 then
-        mod:echo(loc("echo_no_match", input))
-        return nil
-    end
-
-    if #matches == 1 then
-        return matches[1].name, matches[1].item
-    end
-
-    local suffix = string.lower(input)
-    local suffix_matches = {}
-
-    for i = 1, #matches do
-        local match = matches[i]
-
-        if string.sub(string.lower(match.name), -#suffix) == suffix then
-            suffix_matches[#suffix_matches + 1] = match
-        end
-    end
-
-    if #suffix_matches == 1 then
-        return suffix_matches[1].name, suffix_matches[1].item
-    end
-
-    mod:echo(loc("echo_match_count", #matches, input))
-
-    for i = 1, math.min(5, #matches) do
-        mod:echo(loc("echo_match_row", matches[i].name, tostring(matches[i].slot)))
-    end
-
-    return nil
 end
 
 local function item_pref_score(name)
@@ -1062,18 +865,6 @@ local function item_pref_score(name)
     end
 
     return score
-end
-
-local function presets_string()
-    local names = {}
-
-    for name in pairs(OUTFIT_PRESETS) do
-        names[#names + 1] = name
-    end
-
-    table.sort(names)
-
-    return table.concat(names, ", ")
 end
 
 local function fixed_frame_values(ext)
@@ -1330,7 +1121,7 @@ local function persist_generated_visual_overrides(item)
     master_data.overrides = overrides
 end
 
-local function make_item_instance(slot_name, item_name, material_overrides, variant_state, mask_state, opacity)
+local function make_item_instance(slot_name, item_name, material_overrides, variant_state, mask_state, opacity, mesh_state)
     local cache = item_cache()
     local master_item = item_definition(item_name)
 
@@ -1422,6 +1213,9 @@ local function make_item_instance(slot_name, item_name, material_overrides, vari
     item.npclook_mask_state = normalized_masks
     item.npclook_mask_signature = MASKS.signature(normalized_masks)
     item.npclook_opacity = util.normalize_opacity(opacity)
+    item.npclook_mesh_state = MESHES.normalize_state(mesh_state, item_name)
+    item.npclook_mesh_signature = MESHES.signature(item.npclook_mesh_state)
+    MESHES.add_package_dependencies(item, item.npclook_mesh_state, cache)
 
     local custom_materials = EXTRA_SLOTS.normalize_materials(material_overrides)
 
@@ -1483,6 +1277,7 @@ live_visual.signature_fields = {
     "npclook_raw_variant_signature",
     "npclook_mask_signature",
     "npclook_opacity",
+    "npclook_mesh_signature",
 }
 
 live_visual.stable_value = function(value, depth, seen)
@@ -1545,6 +1340,13 @@ local function visual_extension(player_unit)
 end
 
 local function schedule_reapply()
+    local owner = live_visual.owners.current
+
+    if owner ~= live_visual.owners.local_record then
+        owner.reapply_pending = true
+        return
+    end
+
     if not next(_look_state.applied)
         and not next(_look_state.suppressed)
         and not next(_look_state.empty)
@@ -1552,6 +1354,7 @@ local function schedule_reapply()
         and not next(_look_state.materials)
         and not next(_look_state.variants)
         and not next(_look_state.masks)
+        and not next(_look_state.meshes)
         and not next(_look_state.opacity) then
         return
     end
@@ -1773,6 +1576,8 @@ local GENERATED_VISUAL_STATE_FIELDS = {
     "event_in_parent_state_machine",
     "npclook_source_item_name",
     "npclook_opacity",
+    "npclook_mesh_state",
+    "npclook_mesh_signature",
 }
 
 local function generated_visual_value(value)
@@ -1901,11 +1706,23 @@ hook_method(EXTRA_SLOTS.profile_utils, "generate_visual_item", function(func, it
     return generated_visual_item(item) or func(item)
 end)
 
+live_visual.loadout_has_generated_items = function(loadout)
+    for _, item in pairs(loadout) do
+        if type(item) == "table" and item.npclook_generated == true then
+            return true
+        end
+    end
+
+    return false
+end
+
 -- Preserve generated metadata on the visual items produced by ProfileUtils.
 hook_method(EXTRA_SLOTS.profile_utils, "generate_visual_loadout", function(func, loadout, ...)
     local visual_loadout = func(loadout, ...)
 
-    if type(loadout) == "table" and type(visual_loadout) == "table" then
+    -- Portraits and UI characters without a look skip the tree walk.
+    if type(loadout) == "table" and type(visual_loadout) == "table"
+        and live_visual.loadout_has_generated_items(loadout) then
         for slot_name, source_item in pairs(loadout) do
             local visual_item, owner, owner_key, visual_root, root_owner, root_key =
                 EXTRA_SLOTS.find_visual_item_for_slot(visual_loadout, slot_name)
@@ -1949,6 +1766,14 @@ hook_method(EXTRA_SLOTS.profile_utils, "generate_visual_loadout", function(func,
 
     return visual_loadout
 end)
+
+live_visual.apply_slot_meshes = function(slot, item, item_definitions)
+    local state = type(item) == "table" and item.npclook_mesh_state
+
+    if state then
+        MESHES.apply(MESHES.slot_scoped_units(slot, item.name), state, item_definitions or item_cache())
+    end
+end
 
 function EXTRA_SLOTS.apply_custom_materials_to_slot(slot, item)
     return EXTRA_SLOTS.apply_generated_material_scopes_to_slot(
@@ -2342,6 +2167,7 @@ hook_method(EquipmentComponent, "_spawn_player_item_units", function(
     end
 
     util.apply_opacity_to_units(live_visual.capture_slot_units(slot), item.npclook_opacity)
+    live_visual.apply_slot_meshes(slot, item, attach_settings and attach_settings.item_definitions)
 end)
 
 -- Prediction packages
@@ -3030,7 +2856,7 @@ local function release_live_package_record(record)
             table.remove(record.load_ids, i)
         else
             util.report_once(record, "release_error", err, function(message)
-                mod:warning("NPC Look could not release a retired cosmetic package reference: %s", message)
+                mod:warning("Could not release a retired cosmetic package reference: %s", message)
             end)
 
             if package_manager ~= Managers.package then
@@ -3297,6 +3123,11 @@ local function acquire_live_item_packages(ext, slot_name, item, visual_signature
                     else
                         schedule_reapply()
                     end
+
+                    -- Retained packages are shared by every owner.
+                    for _, owner in pairs(live_visual.owners.by_player) do
+                        owner.reapply_pending = true
+                    end
                 end
 
                 local ticket, load_error = RAW_UNITS.acquire_package(
@@ -3331,6 +3162,10 @@ local function acquire_live_item_packages(ext, slot_name, item, visual_signature
 
         refresh_live_package_record(record)
     else
+        -- Callbacks fire outside the owner scope that started the load.
+        local pending_loads = _pending_live_package_loads
+        local owner = live_visual.owners.current
+
         local function package_loaded(load_id)
             if record.cancelled or record.loaded_ids[load_id] then
                 return
@@ -3341,8 +3176,12 @@ local function acquire_live_item_packages(ext, slot_name, item, visual_signature
             if record.loading_complete then
                 local became_ready = refresh_live_package_record(record)
 
-                if became_ready and _pending_live_package_loads[slot_name] == record then
-                    schedule_reapply()
+                if became_ready and pending_loads[slot_name] == record then
+                    if owner == live_visual.owners.local_record then
+                        schedule_reapply()
+                    else
+                        owner.reapply_pending = true
+                    end
                 end
             end
         end
@@ -4040,15 +3879,34 @@ local function apply_mask_overrides_safe(
     end
 end
 
-local function apply_equipment_opacity(equipment)
+live_visual.equipment_has_generated_items = function(equipment)
     for _, slot in pairs(equipment or {}) do
         local item = type(slot) == "table" and slot.item
 
         if type(item) == "table" and item.npclook_generated == true then
-            util.apply_opacity_to_units(
-                live_visual.capture_slot_units(slot),
-                item.npclook_opacity
-            )
+            return true
+        end
+    end
+
+    return false
+end
+
+-- Native visibility updates reset opacity hiding and hidden meshes.
+local function apply_equipment_visual_state(equipment)
+    for _, slot in pairs(equipment or {}) do
+        local item = type(slot) == "table" and slot.item
+
+        if type(item) == "table" and item.npclook_generated == true then
+            if util.normalize_opacity(item.npclook_opacity) ~= util.opacity_default then
+                util.apply_opacity_to_units(
+                    live_visual.capture_slot_units(slot),
+                    item.npclook_opacity
+                )
+            end
+
+            if item.npclook_mesh_state then
+                MESHES.apply_visibility(MESHES.slot_scoped_units(slot, item.name), item.npclook_mesh_state)
+            end
         end
     end
 end
@@ -4070,6 +3928,11 @@ hook_method(EquipmentComponent, "update_item_visibility", function(
         item_definitions
     )
 
+    -- Only generated items carry mask and opacity state.
+    if not live_visual.equipment_has_generated_items(equipment) then
+        return
+    end
+
     apply_mask_overrides_safe(
         equipment,
         item_definitions,
@@ -4077,24 +3940,37 @@ hook_method(EquipmentComponent, "update_item_visibility", function(
         unit_1p,
         first_person_mode
     )
-    apply_equipment_opacity(equipment)
+    apply_equipment_visual_state(equipment)
 end)
 
 hook_method(PlayerUnitVisualLoadoutExtension, "_update_item_visibility", function(func, self, first_person_mode)
+    local owner = live_visual.owners.for_unit(self._unit)
+
+    -- Vanilla characters skip the stale-unit guard entirely.
+    if not (owner and next(owner.managed_slots))
+        and not extra_slot_runtime.has_units()
+        and not live_visual.equipment_has_generated_items(self._equipment) then
+        return func(self, first_person_mode)
+    end
+
     live_visual.sanitize_visibility_equipment(self)
 
     local ok, visibility_error = pcall(func, self, first_person_mode)
 
     if not ok then
         live_visual.sanitize_visibility_equipment(self)
-        live_visual.clear_managed_visibility_slots(self)
+
+        -- Only the owner of this unit may clear its slot records and packages.
+        if owner then
+            live_visual.owners.run(owner, live_visual.clear_managed_visibility_slots, self)
+            live_visual.owners.run(owner, schedule_reapply)
+        end
 
         if live_visual.visibility_fault ~= tostring(visibility_error) then
             live_visual.visibility_fault = tostring(visibility_error)
             mod:error("Visibility update recovered from stale equipment units: %s", live_visual.visibility_fault)
         end
 
-        schedule_reapply()
         return
     end
 
@@ -4115,15 +3991,15 @@ local NIL_INVENTORY_VALUE = {}
 -- Let vanilla correct only the slots replaced by the mod.
 -- Darktide: scripts/extension_systems/visual_loadout/player_unit_visual_loadout_extension.lua
 hook_method(PlayerUnitVisualLoadoutExtension, "server_correction_occurred", function(func, self, unit, from_frame)
-    if self._is_local_unit ~= true or self._unit ~= unit then
+    if self._is_local_unit ~= true or self._unit ~= unit or unit ~= _bound_player_unit then
         return func(self, unit, from_frame)
     end
-
-    live_visual.sanitize_visibility_equipment(self)
 
     if not next(live_visual.managed_slots) then
         return func(self, unit, from_frame)
     end
+
+    live_visual.sanitize_visibility_equipment(self)
 
     local inventory = self._inventory_component
     local equipment = self._equipment
@@ -4191,7 +4067,7 @@ hook_method(PlayerUnitVisualLoadoutExtension, "_unequip_item_from_slot", functio
         from_server_correction_occurred,
         fixed_frame,
         from_destroy)
-    if self._is_local_unit == true and live_visual.managed_slots[slot_name] == true then
+    if live_visual.owners.managed_slots_for(self)[slot_name] == true then
         local slot = self._equipment and self._equipment[slot_name]
 
         if type(slot) ~= "table" or type(slot.item) ~= "table" then
@@ -4367,6 +4243,7 @@ live_visual.swap_slot = function(ext, slot_name, item, visual_signature, fixed_f
 
             local equipment = ext._equipment
             EXTRA_SLOTS.apply_custom_materials_to_slot(equipment and equipment[slot_name], item)
+            live_visual.apply_slot_meshes(equipment and equipment[slot_name], item)
         end
 
         return true, false
@@ -4420,6 +4297,7 @@ live_visual.swap_slot = function(ext, slot_name, item, visual_signature, fixed_f
         if generated then
             local equipment = ext._equipment
             EXTRA_SLOTS.apply_custom_materials_to_slot(equipment and equipment[slot_name], item)
+            live_visual.apply_slot_meshes(equipment and equipment[slot_name], item)
         end
     else
         if package_record then
@@ -4596,6 +4474,13 @@ live_visual.build_plan = function(player)
             end
             return signatures
         end)())
+        .. "|meshes:" .. live_visual.map_signature((function()
+            local signatures = {}
+            for slot_name, value in pairs(_look_state.meshes) do
+                signatures[slot_name] = MESHES.signature(value)
+            end
+            return signatures
+        end)())
 
     if live_visual.plan and live_visual.plan_signature == signature then
         return live_visual.plan
@@ -4632,6 +4517,7 @@ live_visual.build_plan = function(player)
             and not _look_state.empty[slot_name]
             and (_look_state.applied[slot_name] or #EXTRA_SLOTS.normalize_materials(materials) > 0
                 or _look_state.masks[slot_name]
+                or _look_state.meshes[slot_name]
                 or util.normalize_opacity(_look_state.opacity[slot_name]) ~= util.opacity_default) then
             local item = make_item_instance(
                 slot_name,
@@ -4639,7 +4525,8 @@ live_visual.build_plan = function(player)
                 materials,
                 _look_state.variants[slot_name],
                 _look_state.masks[slot_name],
-                _look_state.opacity[slot_name]
+                _look_state.opacity[slot_name],
+                _look_state.meshes[slot_name]
             )
 
             if not item then
@@ -4702,6 +4589,7 @@ live_visual.build_plan = function(player)
             or _look_state.empty[slot_name] ~= nil
             or #EXTRA_SLOTS.normalize_materials(_look_state.materials[slot_name]) > 0
             or _look_state.masks[slot_name] ~= nil
+            or _look_state.meshes[slot_name] ~= nil
         local affected = explicit or desired_signature ~= original_signature
 
         plan.desired_signatures[slot_name] = desired_signature
@@ -4721,6 +4609,8 @@ live_visual.build_plan = function(player)
             detached_item.npclook_raw_variant_signature = desired_item.npclook_raw_variant_signature
             detached_item.npclook_mask_state = desired_item.npclook_mask_state
             detached_item.npclook_mask_signature = desired_item.npclook_mask_signature
+            -- Detaching rebuilds dependencies from gear data; mesh materials load with the item.
+            MESHES.add_package_dependencies(detached_item, desired_item.npclook_mesh_state, item_cache())
             detached_item.npclook_source_item_name = desired_item.npclook_source_item_name or desired_item.name
             detached_item.is_ui_item_preview = true
             detached_item.npclook_generated = true
@@ -4756,7 +4646,7 @@ live_visual.build_plan = function(player)
     return plan
 end
 
-live_visual.equip_all = function(player)
+live_visual.equip_all = function(player, owner)
     local player_unit = safe_player_unit(player)
     local ext = visual_extension(player_unit)
 
@@ -4784,7 +4674,13 @@ live_visual.equip_all = function(player)
         end
     end
 
-    if _bound_player_unit ~= player_unit then
+    if owner then
+        if owner.unit ~= player_unit then
+            live_visual.owners.unbind_unit(owner)
+            owner.unit = player_unit
+            live_visual.owners.by_unit[player_unit] = owner
+        end
+    elseif _bound_player_unit ~= player_unit then
         extra_slot_runtime.clear(0)
         retire_all_live_slot_packages()
         table.clear(_originals)
@@ -4801,12 +4697,16 @@ live_visual.equip_all = function(player)
     end
 
     if profile_package_sync_pending(player, ext, plan) then
-        _live_profile_sync_waiting = true
+        if not owner then
+            _live_profile_sync_waiting = true
+        end
 
         return false, 0, 0, loc("error_local_visual_not_ready"), true
     end
 
-    _live_profile_sync_waiting = false
+    if not owner then
+        _live_profile_sync_waiting = false
+    end
 
     for slot_name in pairs(plan.affected) do
         live_visual.managed_slots[slot_name] = true
@@ -4816,6 +4716,7 @@ live_visual.equip_all = function(player)
     local equipped_count = 0
     local failed_count = 0
     local first_error
+    local loading_error
     local packages_loading = false
     local remove_order = live_visual.ordered_slots(true)
 
@@ -4881,7 +4782,7 @@ live_visual.equip_all = function(player)
                     end
                 elseif slot_packages_loading then
                     packages_loading = true
-                    first_error = first_error or string.format("%s: %s", slot_name, tostring(err))
+                    loading_error = loading_error or string.format("%s: %s", slot_name, tostring(err))
                 else
                     failed_count = failed_count + 1
                     first_error = first_error or string.format("%s: %s", slot_name, tostring(err))
@@ -4922,12 +4823,22 @@ live_visual.equip_all = function(player)
         _look_state.extra_transforms,
         plan.extra_loadout,
         _look_state.variants,
-        _look_state.opacity
+        _look_state.opacity,
+        _look_state.meshes,
+        owner
     )
     equipped_count = equipped_count + extra_slots_spawned
     failed_count = failed_count + extra_slots_failed
     packages_loading = packages_loading or extra_slots_loading
-    first_error = first_error or extra_slots_error
+
+    -- A slot that is only loading must not hide the slot that actually failed.
+    if (tonumber(extra_slots_failed) or 0) > 0 or not extra_slots_ok and not extra_slots_loading then
+        first_error = first_error or extra_slots_error
+    else
+        loading_error = loading_error or extra_slots_error
+    end
+
+    first_error = first_error or loading_error
 
     return failed_count == 0 and not packages_loading and extra_slots_ok, equipped_count, failed_count, first_error, packages_loading
 end
@@ -4975,7 +4886,8 @@ live_visual.matches = function(player)
         _look_state.extra_transforms,
         plan.extra_loadout,
         _look_state.variants,
-        _look_state.opacity
+        _look_state.opacity,
+        _look_state.meshes
     )
 
     if not extra_slots_match then
@@ -5056,14 +4968,10 @@ local function direct_restore(player)
     return restored
 end
 
-local function push_look(quiet)
+local function push_look()
     local player = get_local_player()
 
     if not player then
-        if not quiet then
-            mod:echo(loc("error_no_local_player"))
-        end
-
         return false, loc("error_no_local_player")
     end
 
@@ -5096,14 +5004,6 @@ local function push_look(quiet)
         mod.npclook_refresh_portrait()
     end
 
-    if not quiet then
-        if ok then
-            mod:echo(loc("echo_applied_slots", equipped or 0))
-        else
-            mod:echo(loc("echo_apply_failed", tostring(err or loc("error_local_visual_not_ready"))))
-        end
-    end
-
     return ok, err, false
 end
 
@@ -5116,13 +5016,352 @@ local function repair_visual_after_state_restore()
     extra_slot_runtime.clear(0)
     invalidate_live_plan()
 
-    local ok, err, loading = push_look(true)
+    local ok, err, loading = push_look()
 
     if not ok and not loading then
         schedule_reapply()
     end
 
     return ok, err
+end
+
+-- Companion owners
+
+function live_visual.owners.bind(owner)
+    live_visual.owners.current = owner
+    _look_state = owner.state
+    _originals = owner.originals
+    _live_package_loads = owner.package_loads
+    _pending_live_package_loads = owner.pending_package_loads
+    live_visual.managed_slots = owner.managed_slots
+    live_visual.plan = owner.plan
+    live_visual.plan_signature = owner.plan_signature
+end
+
+function live_visual.owners.pack(...)
+    return { n = select("#", ...), ... }
+end
+
+-- Runs fn with the owner's look and live tables bound and returns its pcall results.
+function live_visual.owners.run(owner, fn, ...)
+    local owners = live_visual.owners
+    local previous = owners.current
+
+    if not owner or owner == previous then
+        return pcall(fn, ...)
+    end
+
+    previous.plan, previous.plan_signature = live_visual.plan, live_visual.plan_signature
+    owners.bind(owner)
+
+    local results = owners.pack(pcall(fn, ...))
+
+    owner.plan, owner.plan_signature = live_visual.plan, live_visual.plan_signature
+    owners.bind(previous)
+
+    return unpack(results, 1, results.n)
+end
+
+function live_visual.owners.for_unit(unit)
+    if unit == nil then
+        return nil
+    elseif unit == _bound_player_unit then
+        return live_visual.owners.local_record
+    end
+
+    return live_visual.owners.by_unit[unit]
+end
+
+live_visual.owners.no_slots = {}
+
+function live_visual.owners.managed_slots_for(ext)
+    local owner = ext and live_visual.owners.for_unit(ext._unit)
+
+    return owner and owner.managed_slots or live_visual.owners.no_slots
+end
+
+-- Runs inside the owner scope.
+function live_visual.owners.unbind_unit(owner)
+    if owner.unit ~= nil then
+        live_visual.owners.by_unit[owner.unit] = nil
+    end
+
+    extra_slot_runtime.clear_context(owner, 0)
+    retire_all_live_slot_packages()
+    table.clear(_originals)
+    table.clear(live_visual.managed_slots)
+    live_visual.plan = nil
+    live_visual.plan_signature = nil
+    owner.unit = nil
+end
+
+-- Runs inside the owner scope.
+function live_visual.owners.restore_owner(owner)
+    local requested_slots = {}
+
+    extra_slot_runtime.clear_context(owner, 0)
+
+    for slot_name in pairs(_originals) do
+        requested_slots[slot_name] = true
+    end
+
+    local restored = restore_slots(owner.player, requested_slots)
+    local ext = visual_extension(owner.unit)
+    local force_visibility = ext and ext.force_update_item_visibility
+
+    if type(force_visibility) == "function" then
+        pcall(force_visibility, ext)
+    end
+
+    return restored
+end
+
+-- Deep copy of a look state; companion mods never get the live tables.
+function live_visual.owners.snapshot_state(state)
+    state = type(state) == "table" and state or {}
+
+    local anchors = {}
+    local transforms = {}
+
+    for id, anchor in pairs(type(state.extra_anchors) == "table" and state.extra_anchors or {}) do
+        if type(id) == "string" and string.match(id, "^extra_%d+$") and valid_look_slot(anchor) then
+            anchors[id] = anchor
+            transforms[id] = EXTRA_SLOTS.normalize_transform(
+                type(state.extra_transforms) == "table" and state.extra_transforms[id] or nil
+            )
+        end
+    end
+
+    return {
+        applied = shallow_copy(type(state.applied) == "table" and state.applied or {}),
+        suppressed = shallow_copy(type(state.suppressed) == "table" and state.suppressed or {}),
+        empty = shallow_copy(type(state.empty) == "table" and state.empty or {}),
+        extra_anchors = anchors,
+        extra_transforms = transforms,
+        materials = EXTRA_SLOTS.clone_material_map(type(state.materials) == "table" and state.materials or {}),
+        opacity = util.clone_opacity_map(type(state.opacity) == "table" and state.opacity or {}),
+        variants = RAW_UNITS.clone_variant_map(state.variants),
+        masks = MASKS.clone_map(state.masks),
+        meshes = MESHES.clone_map(state.meshes),
+        character_id = state.character_id,
+        breed = state.breed,
+    }
+end
+
+-- Drops anything a live owner cannot use instead of failing the whole look.
+function live_visual.owners.normalize_state(state)
+    local result = live_visual.owners.snapshot_state(state)
+
+    local function known_slot(slot_name)
+        return valid_look_slot(slot_name) or result.extra_anchors[slot_name] ~= nil
+    end
+
+    for slot_name, item_name in pairs(result.applied) do
+        local item, normalized_item_name
+
+        if known_slot(slot_name) and type(item_name) == "string" then
+            item, normalized_item_name = item_definition(item_name)
+        end
+
+        if not item or util.item_is_2d(item, item_name) then
+            result.applied[slot_name] = nil
+        else
+            result.applied[slot_name] = normalized_item_name or item_name
+        end
+    end
+
+    for _, field in ipairs({ "suppressed", "empty" }) do
+        for slot_name, value in pairs(result[field]) do
+            if value ~= true or not known_slot(slot_name) then
+                result[field][slot_name] = nil
+            end
+        end
+    end
+
+    for _, field in ipairs({ "materials", "opacity", "variants", "meshes" }) do
+        for slot_name in pairs(result[field]) do
+            if not known_slot(slot_name) then
+                result[field][slot_name] = nil
+            end
+        end
+    end
+
+    for slot_name in pairs(result.masks) do
+        if not valid_look_slot(slot_name) then
+            result.masks[slot_name] = nil
+        end
+    end
+
+    return result
+end
+
+function live_visual.owners.equip(owner)
+    local saved_overlay_retry = _raw_overlay_retry_requested
+    _raw_overlay_retry_requested = false
+
+    local call_ok, ok, equipped, failed, err, packages_loading = live_visual.owners.run(
+        owner,
+        live_visual.equip_all,
+        owner.player,
+        owner
+    )
+
+    if call_ok and _raw_overlay_retry_requested and not packages_loading then
+        _raw_overlay_retry_requested = false
+        extra_slot_runtime.clear_context(owner, 0)
+        owner.plan = nil
+        owner.plan_signature = nil
+        call_ok, ok, equipped, failed, err, packages_loading = live_visual.owners.run(
+            owner,
+            live_visual.equip_all,
+            owner.player,
+            owner
+        )
+    end
+
+    _raw_overlay_retry_requested = saved_overlay_retry
+
+    if not call_ok then
+        ok, equipped, failed, err, packages_loading = false, 0, 1, tostring(ok), false
+    end
+
+    ok = ok == true
+    packages_loading = packages_loading == true
+    owner.reapply_pending = not ok
+
+    if ok then
+        util.reset_retry(owner.retry)
+        util.report_once(owner, "reported_error", nil)
+    elseif packages_loading then
+        util.defer_retry(owner.retry)
+    else
+        util.report_once(owner, "reported_error", tostring(err or loc("generic_unknown_error")), function(message)
+            mod:warning("Companion look failed: %s", message)
+        end)
+    end
+
+    return ok, err, packages_loading, tonumber(equipped) or 0, tonumber(failed) or 0
+end
+
+function live_visual.owners.apply(player, state)
+    local owners = live_visual.owners
+    local player_unit = safe_player_unit(player)
+
+    if not player then
+        return false, loc("error_no_target_player")
+    elseif player == get_local_player() or player_unit ~= nil and player_unit == _bound_player_unit then
+        return false, loc("error_target_is_local_player")
+    elseif not visual_extension(player_unit) then
+        return false, loc("error_visual_extension_missing")
+    elseif not item_cache() then
+        return false, loc("error_master_cache_not_ready")
+    end
+
+    local owner = owners.by_player[player]
+
+    if not owner then
+        owner = {
+            player = player,
+            originals = {},
+            package_loads = {},
+            pending_package_loads = {},
+            managed_slots = {},
+            retry = util.new_retry(0.1, 1, 1.6),
+        }
+        owners.by_player[player] = owner
+        owners.count = owners.count + 1
+    end
+
+    owner.state = owners.normalize_state(state)
+    util.reset_retry(owner.retry)
+
+    return owners.equip(owner)
+end
+
+function live_visual.owners.clear(player, restore)
+    local owners = live_visual.owners
+    local owner = player and owners.by_player[player]
+
+    if not owner then
+        return true
+    end
+
+    local restored = true
+
+    if restore ~= false and util.safe_unit_alive(owner.unit) then
+        local call_ok, result = owners.run(owner, owners.restore_owner, owner)
+        restored = call_ok and result == true
+
+        -- Keep the originals and retry with an empty look until the bot is vanilla again.
+        if not restored then
+            owner.state = owners.normalize_state(nil)
+            owner.reapply_pending = true
+            util.reset_retry(owner.retry)
+
+            return false
+        end
+    end
+
+    owners.run(owner, owners.unbind_unit, owner)
+    owners.by_player[player] = nil
+    owners.count = math.max(owners.count - 1, 0)
+
+    return restored
+end
+
+function live_visual.owners.release_all(restore)
+    local players = table.keys(live_visual.owners.by_player)
+
+    for i = 1, #players do
+        if not live_visual.owners.clear(players[i], restore) then
+            live_visual.owners.clear(players[i], false)
+        end
+    end
+
+    table.clear(live_visual.owners.by_player)
+    table.clear(live_visual.owners.by_unit)
+    live_visual.owners.count = 0
+end
+
+-- Bots respawn with new units; owners follow them while their look is set.
+function live_visual.owners.update(dt)
+    local owners = live_visual.owners
+
+    if owners.count == 0 then
+        return
+    end
+
+    owners.poll_elapsed = owners.poll_elapsed + dt
+
+    if owners.poll_elapsed < BINDING_POLL_INTERVAL then
+        return
+    end
+
+    local elapsed = owners.poll_elapsed
+    local ready = _game_state_ready and gameplay_time_manager() ~= nil and item_cache() ~= nil
+    owners.poll_elapsed = 0
+
+    for player, owner in pairs(owners.by_player) do
+        local player_unit = safe_player_unit(player)
+        local alive = util.safe_unit_alive(player_unit)
+
+        if owner.unit ~= nil and (owner.unit ~= player_unit or not alive) then
+            owners.run(owner, owners.unbind_unit, owner)
+            owner.reapply_pending = true
+            util.reset_retry(owner.retry)
+        end
+
+        if ready and alive and owner.reapply_pending and util.retry_due(owner.retry, elapsed) then
+            local ok, _, packages_loading = owners.equip(owner)
+
+            if ok and not live_visual.has_look_state(owner.state) then
+                -- A cleared bot is vanilla again.
+                owners.clear(player, false)
+            elseif not ok and not packages_loading and util.record_attempt(owner.retry) then
+                owner.reapply_pending = false
+            end
+        end
+    end
 end
 
 local function best_items_per_slot(matches)
@@ -5164,54 +5403,24 @@ local function best_items_per_slot(matches)
     return selected
 end
 
-local function collect_outfit(filter)
-    local preset = OUTFIT_PRESETS[string.lower(filter)]
+local function collect_outfit(preset_name)
+    local preset = type(preset_name) == "string" and OUTFIT_PRESETS[string.lower(preset_name)]
 
-    if preset then
-        local cache = item_cache()
-        local outfit = {}
-
-        for slot_name, item_name in pairs(preset) do
-            local item = item_definition(item_name)
-
-            if item and not util.item_is_2d(item, item_name) then
-                outfit[slot_name] = item_name
-            elseif not item then
-                mod:echo(loc("echo_missing", item_name))
-            end
-        end
-
-        return outfit, true
-    end
-
-    local matches = find_item_candidates(filter)
-
-    if not matches or #matches == 0 then
+    if not preset then
         return nil
     end
 
-    return best_items_per_slot(matches), false
-end
+    local outfit = {}
 
-local function assign_outfit(outfit)
-    local count = 0
-    local cache = item_cache() or {}
-
-    for slot_name, item_name in pairs(outfit) do
+    for slot_name, item_name in pairs(preset) do
         local item = item_definition(item_name)
 
-        if valid_look_slot(slot_name) and item and not util.item_is_2d(item, item_name) then
-            _look_state.applied[slot_name] = item_name
-            _look_state.suppressed[slot_name] = nil
-            _look_state.empty[slot_name] = nil
-            _look_state.materials[slot_name] = nil
-            count = count + 1
-        elseif not valid_look_slot(slot_name) then
-            mod:echo(loc("echo_bad_slot", tostring(slot_name)))
+        if item and not util.item_is_2d(item, item_name) then
+            outfit[slot_name] = item_name
         end
     end
 
-    return count
+    return outfit, true
 end
 
 mod.npclook_item_cache = item_cache
@@ -5493,7 +5702,7 @@ local function look_metadata(player)
     return metadata
 end
 
-local function encode_look_code(applied, suppressed, empty, metadata, extra_anchors, extra_transforms, materials, variants, masks, opacity)
+local function encode_look_code(applied, suppressed, empty, metadata, extra_anchors, extra_transforms, materials, variants, masks, opacity, meshes)
     local segments = { LOOK_CODE_PREFIX }
     local metadata_keys = table.keys(metadata or {})
 
@@ -5659,6 +5868,52 @@ local function encode_look_code(applied, suppressed, empty, metadata, extra_anch
         end
     end
 
+    local mesh_slots = table.keys(meshes or {})
+    table.sort(mesh_slots)
+
+    for i = 1, #mesh_slots do
+        local slot_name = mesh_slots[i]
+        local item_name = type(applied and applied[slot_name]) == "string" and applied[slot_name] or nil
+        local valid_slot = valid_look_slot(slot_name) or type(extra_anchors and extra_anchors[slot_name]) == "string"
+
+        -- Inherited native pieces keep their own item name.
+        if not item_name and valid_look_slot(slot_name) and type(meshes[slot_name]) == "table" then
+            item_name = type(meshes[slot_name].item_name) == "string" and meshes[slot_name].item_name or nil
+        end
+
+        local state_value = valid_slot and item_name and MESHES.normalize_state(meshes[slot_name], item_name) or nil
+
+        if state_value then
+            local prefix = "W:" .. encode_look_token(slot_name) .. "=" .. encode_look_token(item_name)
+            local hidden_keys = table.keys(state_value.hidden)
+            local material_keys = table.keys(state_value.materials)
+            table.sort(hidden_keys)
+            table.sort(material_keys)
+
+            -- Hidden meshes share one segment per slot.
+            if #hidden_keys > 0 then
+                local segment = prefix .. ",h"
+
+                for key_index = 1, #hidden_keys do
+                    segment = segment .. "," .. encode_look_token(hidden_keys[key_index])
+                end
+
+                segments[#segments + 1] = segment
+            end
+
+            for key_index = 1, #material_keys do
+                local key = material_keys[key_index]
+                local segment = prefix .. ",m," .. encode_look_token(key)
+
+                for entry_index = 1, #state_value.materials[key] do
+                    segment = segment .. "," .. encode_look_token(state_value.materials[key][entry_index])
+                end
+
+                segments[#segments + 1] = segment
+            end
+        end
+    end
+
     return table.concat(segments, "|")
 end
 
@@ -5687,6 +5942,8 @@ local function decode_look_code(value)
     local variants = {}
     local masks = {}
     local opacity = {}
+    local meshes = {}
+    local seen_mesh_keys = {}
     local count = 0
     local segment_count = 0
     local first = true
@@ -5792,7 +6049,7 @@ local function decode_look_code(value)
                 for encoded_material in string.gmatch(material_payload .. ",", "(.-),") do
                     local material_entry = decode_look_token(encoded_material)
                     local material_name, material_target = EXTRA_SLOTS.material_entry_parts(material_entry)
-                    local material_item = material_name and rawget(cache, material_name)
+                    local material_item = material_name and EXTRA_SLOTS.material_override_item(cache, material_name)
 
                     if not material_item or not EXTRA_SLOTS.is_material_override_item(material_item) then
                         return nil, nil, nil, loc("error_code_missing_item", tostring(material_name or loc("error_code_invalid_encoding")))
@@ -5891,7 +6148,7 @@ local function decode_look_code(value)
                         else
                             local material_entry = decode_look_token(fields[i])
                             local material_name, material_target = EXTRA_SLOTS.material_entry_parts(material_entry)
-                            local material_item = material_name and rawget(cache, material_name)
+                            local material_item = material_name and EXTRA_SLOTS.material_override_item(cache, material_name)
 
                             if not material_item or not EXTRA_SLOTS.is_material_override_item(material_item) then
                                 return nil, nil, nil, loc(
@@ -6168,6 +6425,74 @@ local function decode_look_code(value)
                     masks[slot_name] = next(state_value.fields) and state_value or nil
                     seen_mask_fields[duplicate_key] = true
                 end
+            elseif kind == "W:" then
+                local equals = string.find(payload, "=", 1, true)
+
+                if not equals then
+                    return nil, nil, nil, loc("error_code_item_entry")
+                end
+
+                local slot_name = decode_look_token(string.sub(payload, 1, equals - 1))
+                local fields = {}
+
+                for field in string.gmatch(string.sub(payload, equals + 1) .. ",", "(.-),") do
+                    fields[#fields + 1] = field
+                end
+
+                local item_name = decode_look_token(fields[1])
+                local mode = fields[2]
+                local key = decode_look_token(fields[3])
+                local valid_slot = slot_name and (valid_look_slot(slot_name) or string.match(slot_name, "^extra_%d+$"))
+                local item, normalized_item_name = item_definition(item_name)
+                local duplicate_key = tostring(slot_name) .. "\31" .. tostring(mode)
+                    .. (mode == "m" and "\31" .. tostring(key) or "")
+
+                if not valid_slot or not item or not MESHES.valid_key(key) or seen_mesh_keys[duplicate_key]
+                    or (mode == "h" and #fields > 258) or (mode == "m" and (#fields < 4 or #fields > 35))
+                    or (mode ~= "h" and mode ~= "m") then
+                    return nil, nil, nil, loc("error_code_item_entry")
+                end
+
+                item_name = normalized_item_name or item_name
+
+                local state_value = meshes[slot_name]
+
+                if state_value and state_value.item_name ~= item_name then
+                    return nil, nil, nil, loc("error_code_item_entry")
+                end
+
+                state_value = state_value or { item_name = item_name, hidden = {}, materials = {} }
+
+                if mode == "h" then
+                    for field_index = 3, #fields do
+                        local hidden_key = decode_look_token(fields[field_index])
+
+                        if not MESHES.valid_key(hidden_key) then
+                            return nil, nil, nil, loc("error_code_item_entry")
+                        end
+
+                        state_value.hidden[hidden_key] = true
+                    end
+                else
+                    local entries = {}
+
+                    for field_index = 4, #fields do
+                        local material_entry = decode_look_token(fields[field_index])
+                        local material_name, material_target = EXTRA_SLOTS.material_entry_parts(material_entry)
+                        local material_item = material_name and EXTRA_SLOTS.material_override_item(cache, material_name)
+
+                        if not material_item or not EXTRA_SLOTS.is_material_override_item(material_item) then
+                            return nil, nil, nil, loc("error_code_missing_item", tostring(material_name or loc("error_code_invalid_encoding")))
+                        end
+
+                        entries[#entries + 1] = EXTRA_SLOTS.material_entry(material_name, material_target)
+                    end
+
+                    state_value.materials[key] = entries
+                end
+
+                seen_mesh_keys[duplicate_key] = true
+                meshes[slot_name] = state_value
             else
                 return nil, nil, nil, loc("error_code_unknown_entry")
             end
@@ -6210,7 +6535,18 @@ local function decode_look_code(value)
         end
     end
 
-    return applied, suppressed, empty, count, metadata, extra_anchors, extra_transforms, materials, variants, masks, opacity
+    for slot_name, state_value in pairs(meshes) do
+        if not valid_look_slot(slot_name) and not extra_anchors[slot_name] then
+            return nil, nil, nil, loc("error_code_slot")
+        elseif applied[slot_name] ~= state_value.item_name
+            and (applied[slot_name] ~= nil or not valid_look_slot(slot_name)) then
+            return nil, nil, nil, loc("error_code_item_entry")
+        end
+
+        meshes[slot_name] = MESHES.normalize_state(state_value, state_value.item_name)
+    end
+
+    return applied, suppressed, empty, count, metadata, extra_anchors, extra_transforms, materials, variants, masks, opacity, meshes
 end
 
 -- Player presets
@@ -6268,6 +6604,7 @@ local LIBRARY_MODE_LABELS = {
     units = loc("ui_mode_units"),
     materials = loc("ui_mode_materials"),
     nodes = loc("ui_mode_nodes"),
+    assets = loc("ui_mode_assets"),
 }
 
 local function clone_string_map(source)
@@ -6521,7 +6858,7 @@ local function copy_to_clipboard(value)
     return ok and copied ~= false
 end
 
-mod.npclook_export_code = function(applied, suppressed, empty, extra_anchors, extra_transforms, materials, variants, masks, opacity)
+mod.npclook_export_code = function(applied, suppressed, empty, extra_anchors, extra_transforms, materials, variants, masks, opacity, meshes)
     local player = get_local_player()
 
     if applied == nil and suppressed == nil and empty == nil then
@@ -6541,6 +6878,7 @@ mod.npclook_export_code = function(applied, suppressed, empty, extra_anchors, ex
         variants = _look_state.variants
         masks = _look_state.masks
         opacity = _look_state.opacity
+        meshes = _look_state.meshes
     end
 
     return encode_look_code(
@@ -6553,7 +6891,8 @@ mod.npclook_export_code = function(applied, suppressed, empty, extra_anchors, ex
         materials or {},
         variants or {},
         masks or {},
-        opacity or {}
+        opacity or {},
+        meshes or {}
     )
 end
 
@@ -6566,6 +6905,7 @@ live_visual.has_look_state = function(state)
         or next(state.materials or {}) ~= nil
         or next(state.variants or {}) ~= nil
         or next(state.masks or {}) ~= nil
+        or next(state.meshes or {}) ~= nil
         or next(state.opacity or {}) ~= nil
     )
 end
@@ -6589,6 +6929,7 @@ live_visual.clear_look_intent = function()
     table.clear(_look_state.materials)
     table.clear(_look_state.variants)
     table.clear(_look_state.masks)
+    table.clear(_look_state.meshes)
     table.clear(_look_state.opacity)
     _look_state.character_id = nil
     _look_state.breed = nil
@@ -6633,6 +6974,7 @@ live_visual.add_look_to_loadout = function(source_loadout, state)
     local opacity_by_slot = state.opacity or {}
     local variants = state.variants or {}
     local masks = state.masks or {}
+    local meshes = state.meshes or {}
     local loadout = shallow_copy(source_loadout)
 
     for slot_name in pairs(suppressed) do
@@ -6655,6 +6997,7 @@ live_visual.add_look_to_loadout = function(source_loadout, state)
             and not empty[slot_name]
             and (applied[slot_name] or #EXTRA_SLOTS.normalize_materials(materials) > 0
                 or masks[slot_name]
+                or meshes[slot_name]
                 or util.normalize_opacity(opacity_by_slot[slot_name]) ~= util.opacity_default)
             and make_item_instance(
                 slot_name,
@@ -6662,7 +7005,8 @@ live_visual.add_look_to_loadout = function(source_loadout, state)
                 materials,
                 variants[slot_name],
                 masks[slot_name],
-                opacity_by_slot[slot_name]
+                opacity_by_slot[slot_name],
+                meshes[slot_name]
             ) or nil
 
         if item then
@@ -6693,6 +7037,15 @@ live_visual.look_profile_signature = function(profile, state)
 
             for slot_name, value in pairs(state.masks or {}) do
                 signatures[slot_name] = MASKS.signature(value)
+            end
+
+            return signatures
+        end)())
+        .. "|meshes:" .. live_visual.map_signature((function()
+            local signatures = {}
+
+            for slot_name, value in pairs(state.meshes or {}) do
+                signatures[slot_name] = MESHES.signature(value)
             end
 
             return signatures
@@ -6746,7 +7099,8 @@ live_visual.profile_with_look = function(profile, state)
         profile_breed_name(source_profile),
         copy.loadout,
         variants,
-        state.opacity or {}
+        state.opacity or {},
+        state.meshes or {}
     )
     copy.npclook_source_profile = source_profile
     copy.npclook_active_look_signature = signature
@@ -6781,7 +7135,7 @@ live_visual.decoded_profile_look = function(preset)
     end
 
     local applied, suppressed, empty, count_or_error, _, extra_anchors,
-        extra_transforms, materials, variants, masks, opacity = decode_look_code(code)
+        extra_transforms, materials, variants, masks, opacity, meshes = decode_look_code(code)
 
     if not applied then
         if live_visual.loadout_profile_warnings[name] ~= code then
@@ -6806,6 +7160,7 @@ live_visual.decoded_profile_look = function(preset)
         opacity = opacity or {},
         variants = variants or {},
         masks = masks or {},
+        meshes = meshes or {},
     }
 
     live_visual.loadout_profile_cache[name] = {
@@ -6829,9 +7184,9 @@ local LOADOUT_PRESETS = mod:io_dofile(
     end,
     clear_foreign_look = live_visual.clear_foreign_active_look,
     reset_look = function()
-        local ok = mod.npclook_reset_all()
+        local ok, _, changed = mod.npclook_reset_all()
 
-        return ok == true, ok == true and nil or loc("error_slot_restore")
+        return ok == true, ok == true and nil or loc("error_slot_restore"), changed ~= false
     end,
     import_code = function(code)
         return mod.npclook_import_code(code)
@@ -6846,10 +7201,21 @@ local LOADOUT_PRESETS = mod:io_dofile(
     end,
     invalidate_profile_cache = live_visual.invalidate_loadout_profile_cache,
     hook_method = hook_method,
+    button_visible = function()
+        return mod:get("loadout_button_visible") ~= false
+    end,
+    button_position = function()
+        return mod:get("loadout_button_x"), mod:get("loadout_button_y")
+    end,
 })
 
 live_visual.profile_with_selected_look = function(profile)
     if type(profile) ~= "table" then
+        return profile
+    end
+
+    -- Companion mods decorate their own profiles.
+    if profile.npclook_external_look == true then
         return profile
     end
 
@@ -6966,8 +7332,17 @@ hook_module(
     end
 )
 
-local function flush_ui_profile_extra_deletions(profile_spawner)
-    local unit_spawner = profile_spawner and profile_spawner._unit_spawner
+-- Only spawners that own extra units need a forced deletion flush.
+local function clear_ui_profile_extra_slots(profile_spawner)
+    profile_spawner._npclook_extra_slots_ready = nil
+
+    if not extra_slot_runtime.has_context(profile_spawner) then
+        return
+    end
+
+    extra_slot_runtime.clear_context(profile_spawner, 0)
+
+    local unit_spawner = profile_spawner._unit_spawner
     local flush = unit_spawner and (
         unit_spawner.commit_and_remove_pending_units
         or unit_spawner.remove_pending_units
@@ -6981,9 +7356,7 @@ end
 -- Apply character-specific pinned looks at the shared UI profile-spawner boundary.
 -- Darktide: scripts/managers/ui/ui_profile_spawner.lua
 hook_module("scripts/managers/ui/ui_profile_spawner", "spawn_profile", function(func, self, profile, ...)
-    extra_slot_runtime.clear_context(self, 0)
-    flush_ui_profile_extra_deletions(self)
-    self._npclook_extra_slots_ready = nil
+    clear_ui_profile_extra_slots(self)
 
     if self._reference_name ~= "NPCLookStudioPreviewView" then
         profile = live_visual.profile_with_selected_look(profile)
@@ -7036,7 +7409,15 @@ live_visual.sync_ui_profile_extra_slots = function(profile_spawner)
     local character_hidden = profile_spawner and (profile_spawner._visible == false
         or profile_spawner._character_toggle_state == false)
 
-    if type(entries) ~= "table" or #entries == 0 or character_hidden or not util.safe_unit_alive(unit_3p) then
+    if type(entries) ~= "table" or #entries == 0 then
+        profile_spawner._npclook_extra_slots_ready = true
+
+        if extra_slot_runtime.has_context(profile_spawner) then
+            extra_slot_runtime.clear_context(profile_spawner, 0)
+        end
+
+        return
+    elseif character_hidden or not util.safe_unit_alive(unit_3p) then
         extra_slot_runtime.clear_context(profile_spawner, 0)
         profile_spawner._npclook_extra_slots_ready = true
         return
@@ -7061,11 +7442,14 @@ end
 
 -- Sync extras on independent UI characters.
 -- Darktide: scripts/managers/ui/ui_profile_spawner.lua
-hook_module("scripts/managers/ui/ui_profile_spawner", "update", function(func, self, dt, t, input_service)
-    local results = { func(self, dt, t, input_service) }
-    live_visual.sync_ui_profile_extra_slots(self)
+local function sync_after_ui_profile_update(profile_spawner, ...)
+    live_visual.sync_ui_profile_extra_slots(profile_spawner)
 
-    return unpack(results)
+    return ...
+end
+
+hook_module("scripts/managers/ui/ui_profile_spawner", "update", function(func, self, dt, t, input_service)
+    return sync_after_ui_profile_update(self, func(self, dt, t, input_service))
 end)
 
 -- Keep UI profiles pending until their extra slots are ready.
@@ -7086,18 +7470,14 @@ end)
 
 -- Darktide: scripts/managers/ui/ui_profile_spawner.lua
 hook_module("scripts/managers/ui/ui_profile_spawner", "_despawn_current_character_profile", function(func, self, ...)
-    extra_slot_runtime.clear_context(self, 0)
-    flush_ui_profile_extra_deletions(self)
-    self._npclook_extra_slots_ready = nil
+    clear_ui_profile_extra_slots(self)
 
     return func(self, ...)
 end)
 
 -- Darktide: scripts/managers/ui/ui_profile_spawner.lua
 hook_module("scripts/managers/ui/ui_profile_spawner", "destroy", function(func, self, ...)
-    extra_slot_runtime.clear_context(self, 0)
-    flush_ui_profile_extra_deletions(self)
-    self._npclook_extra_slots_ready = nil
+    clear_ui_profile_extra_slots(self)
 
     return func(self, ...)
 end)
@@ -7123,10 +7503,34 @@ hook_method(UIUnitSpawner, "mark_for_deletion", function(func, self, unit, ...)
     return func(self, unit, ...)
 end)
 
+-- Since 1.13 the gameplay spawner spawns MasterItems entries by name. Raw units are
+-- registered under their own unit resource and would keep spawning themselves.
+-- Darktide: scripts/foundation/managers/unit_spawner/unit_spawner_manager.lua
+hook_method(UnitSpawnerManager, "spawn_unit", function(func, self, unit_or_item_name, ...)
+    local cache = type(unit_or_item_name) == "string" and MasterItems.get_cached() or nil
+    local item = cache and rawget(cache, unit_or_item_name)
+
+    if type(item) ~= "table" or item.npclook_raw_unit ~= true or item.base_unit ~= unit_or_item_name then
+        return func(self, unit_or_item_name, ...)
+    end
+
+    local unit = World.spawn_unit_ex(self._world, unit_or_item_name, nil, ...)
+
+    Unit.set_data(unit, "unit_name", unit_or_item_name)
+
+    return unit
+end)
+
 -- Clear linked extras at the live-unit deletion boundary.
 hook_method(UnitSpawnerManager, "mark_for_deletion", function(func, self, unit, ...)
     if unit == _bound_player_unit then
         live_visual.refresh_active_package_units(visual_extension(unit))
+    elseif live_visual.owners.by_unit[unit] then
+        live_visual.owners.run(
+            live_visual.owners.by_unit[unit],
+            live_visual.refresh_active_package_units,
+            visual_extension(unit)
+        )
     end
 
     if not prepare_npclook_unit_deletion(self, unit) then
@@ -7228,6 +7632,7 @@ mod.npclook_state_snapshot = function()
         variants = RAW_UNITS.clone_variant_map(_look_state.variants),
         masks = MASKS.clone_map(_look_state.masks),
         opacity = util.clone_opacity_map(_look_state.opacity),
+        meshes = MESHES.clone_map(_look_state.meshes),
         preset_names = mod.npclook_preset_names(),
     }
 end
@@ -7246,300 +7651,12 @@ local function suppress_missing_slots(applied, suppressed, empty, slots)
     end
 end
 
-mod.npclook_apply_outfit = function(filter, replace_entire_model)
-    if type(filter) ~= "string" or filter == "" then
-        return false, loc("error_missing_outfit")
-    end
-
-    local player = get_local_player()
-
-    if not player then
-        return false, loc("error_no_local_player")
-    end
-
-    local outfit, is_preset = collect_outfit(filter)
-
-    if not outfit or not next(outfit) then
-        return false, loc("error_nothing_matched")
-    end
-
-    local previous_applied = clone_string_map(_look_state.applied)
-    local previous_suppressed = clone_string_map(_look_state.suppressed)
-    local previous_empty = clone_string_map(_look_state.empty)
-    local previous_materials = EXTRA_SLOTS.clone_material_map(_look_state.materials)
-    local equipped_count = assign_outfit(outfit)
-
-    if equipped_count == 0 then
-        restore_string_map(_look_state.applied, previous_applied)
-        restore_string_map(_look_state.suppressed, previous_suppressed)
-        restore_string_map(_look_state.empty, previous_empty)
-        EXTRA_SLOTS.restore_material_map(_look_state.materials, previous_materials)
-        return false, loc("error_no_valid_slots")
-    end
-
-    if replace_entire_model then
-        suppress_missing_slots(_look_state.applied, _look_state.suppressed, _look_state.empty, REPLACE_BODY_SUPPRESS)
-        suppress_missing_slots(_look_state.applied, _look_state.suppressed, _look_state.empty, REPLACE_GEAR_SLOTS)
-    end
-
-    if same_string_map(_look_state.applied, previous_applied)
-        and same_string_map(_look_state.suppressed, previous_suppressed)
-        and same_string_map(_look_state.empty, previous_empty)
-        and EXTRA_SLOTS.same_material_maps(_look_state.materials, previous_materials) then
-        return true, equipped_count, is_preset
-    end
-
-    local applied_ok, apply_error = push_look(true)
-
-    if not applied_ok then
-        restore_string_map(_look_state.applied, previous_applied)
-        restore_string_map(_look_state.suppressed, previous_suppressed)
-        restore_string_map(_look_state.empty, previous_empty)
-        EXTRA_SLOTS.restore_material_map(_look_state.materials, previous_materials)
-        repair_visual_after_state_restore()
-        return false, loc("error_visual_apply", tostring(apply_error or loc("generic_unknown_error")))
-    end
-
-    return true, equipped_count, is_preset
-end
-
-mod.npclook_show_slot = function(slot_name)
-    if not valid_look_slot(slot_name) then
-        return false, loc("error_invalid_slot")
-    end
-
-    local player = get_local_player()
-
-    if not player then
-        return false, loc("error_no_local_player")
-    end
-
-    local previous_applied = _look_state.applied[slot_name]
-    local previous_suppressed = _look_state.suppressed[slot_name]
-    local previous_empty = _look_state.empty[slot_name]
-    local previous_materials = EXTRA_SLOTS.normalize_materials(_look_state.materials[slot_name])
-
-    _look_state.applied[slot_name] = nil
-    _look_state.suppressed[slot_name] = nil
-    _look_state.empty[slot_name] = nil
-    _look_state.materials[slot_name] = nil
-
-    local restored, restore_error = push_look(true)
-
-    if not restored then
-        _look_state.applied[slot_name] = previous_applied
-        _look_state.suppressed[slot_name] = previous_suppressed
-        _look_state.empty[slot_name] = previous_empty
-        _look_state.materials[slot_name] = #previous_materials > 0 and previous_materials or nil
-        repair_visual_after_state_restore()
-        return false, restore_error or loc("error_slot_restore")
-    end
-
-    return true
-end
-
-mod.npclook_full_hide = function()
-    local player = get_local_player()
-
-    if not player then
-        return false, loc("error_no_local_player")
-    end
-
-    local previous_applied = clone_string_map(_look_state.applied)
-    local previous_suppressed = clone_string_map(_look_state.suppressed)
-    local previous_empty = clone_string_map(_look_state.empty)
-
-    for slot_name in pairs(LOOK_SLOTS) do
-        if valid_look_slot(slot_name) then
-            _look_state.suppressed[slot_name] = true
-            _look_state.empty[slot_name] = nil
-            _look_state.applied[slot_name] = nil
-        end
-    end
-
-    for _, id in ipairs(EXTRA_SLOTS.ids(_look_state.extra_anchors)) do
-        _look_state.suppressed[id] = true
-        _look_state.empty[id] = nil
-        _look_state.applied[id] = nil
-    end
-
-    if same_string_map(_look_state.applied, previous_applied)
-        and same_string_map(_look_state.suppressed, previous_suppressed)
-        and same_string_map(_look_state.empty, previous_empty) then
-        return true
-    end
-
-    local applied_ok, apply_error = push_look(true)
-
-    if not applied_ok then
-        restore_string_map(_look_state.applied, previous_applied)
-        restore_string_map(_look_state.suppressed, previous_suppressed)
-        restore_string_map(_look_state.empty, previous_empty)
-        repair_visual_after_state_restore()
-        return false, loc("error_visual_apply", tostring(apply_error or loc("generic_unknown_error")))
-    end
-
-    return true
-end
-
 mod.npclook_refresh_look = function()
     if not get_local_player() then
         return false, loc("error_no_local_player")
     end
 
-    return push_look(true)
-end
-
-mod.npclook_apply_item = function(slot_name, item_name)
-    local player = get_local_player()
-
-    if not player then
-        return false, loc("error_no_local_player")
-    end
-
-    local is_extra_slot = EXTRA_SLOTS.is_slot(slot_name, _look_state.extra_anchors)
-
-    if not valid_look_slot(slot_name) and not is_extra_slot then
-        return false, loc("error_invalid_slot")
-    end
-
-    local item, normalized_item_name = item_definition(item_name)
-
-    item_name = normalized_item_name or item_name
-
-    if not item then
-        return false, loc("error_item_not_found")
-    elseif util.item_is_2d(item, item_name) then
-        return false, loc("error_visual_slot_unavailable")
-    elseif is_extra_slot then
-        local profile = safe_profile(player)
-
-        if not util.item_has_visual_base(item, profile_breed_name(profile)) then
-            return false, loc("error_visual_slot_unavailable")
-        end
-    end
-
-    local active_materials = is_extra_slot
-        and EXTRA_SLOTS.normalize_transform(_look_state.extra_transforms[slot_name]).materials
-        or EXTRA_SLOTS.normalize_materials(_look_state.materials[slot_name])
-
-    if _look_state.applied[slot_name] == item_name and not _look_state.suppressed[slot_name]
-        and not _look_state.empty[slot_name] and #active_materials == 0 then
-        return true
-    end
-
-    local previous_applied = _look_state.applied[slot_name]
-    local previous_suppressed = _look_state.suppressed[slot_name]
-    local previous_empty = _look_state.empty[slot_name]
-    local previous_materials = is_extra_slot
-        and EXTRA_SLOTS.normalize_transform(_look_state.extra_transforms[slot_name]).materials
-        or EXTRA_SLOTS.normalize_materials(_look_state.materials[slot_name])
-
-    _look_state.applied[slot_name] = item_name
-    _look_state.suppressed[slot_name] = nil
-    _look_state.empty[slot_name] = nil
-
-    if is_extra_slot then
-        local transform = EXTRA_SLOTS.normalize_transform(_look_state.extra_transforms[slot_name])
-        transform.materials = {}
-        _look_state.extra_transforms[slot_name] = EXTRA_SLOTS.normalize_transform(transform)
-    else
-        _look_state.materials[slot_name] = nil
-    end
-
-    local applied_ok, apply_error = push_look(true)
-
-    if not applied_ok then
-        _look_state.applied[slot_name] = previous_applied
-        _look_state.suppressed[slot_name] = previous_suppressed
-        _look_state.empty[slot_name] = previous_empty
-
-        if is_extra_slot then
-            local transform = EXTRA_SLOTS.normalize_transform(_look_state.extra_transforms[slot_name])
-            transform.materials = previous_materials
-            _look_state.extra_transforms[slot_name] = EXTRA_SLOTS.normalize_transform(transform)
-        else
-            _look_state.materials[slot_name] = #previous_materials > 0 and previous_materials or nil
-        end
-
-        repair_visual_after_state_restore()
-        return false, loc("error_visual_apply", tostring(apply_error or loc("generic_unknown_error")))
-    end
-
-    return true
-end
-
-mod.npclook_hide_slot = function(slot_name)
-    local player = get_local_player()
-
-    if not player then
-        return false, loc("error_no_local_player")
-    end
-
-    if not valid_look_slot(slot_name) and not EXTRA_SLOTS.is_slot(slot_name, _look_state.extra_anchors) then
-        return false, loc("error_invalid_slot")
-    end
-
-    if _look_state.suppressed[slot_name] == true and _look_state.applied[slot_name] == nil and _look_state.empty[slot_name] == nil then
-        return true
-    end
-
-    local previous_applied = _look_state.applied[slot_name]
-    local previous_suppressed = _look_state.suppressed[slot_name]
-    local previous_empty = _look_state.empty[slot_name]
-
-    _look_state.suppressed[slot_name] = true
-    _look_state.empty[slot_name] = nil
-    _look_state.applied[slot_name] = nil
-
-    local applied_ok, apply_error = push_look(true)
-
-    if not applied_ok then
-        _look_state.applied[slot_name] = previous_applied
-        _look_state.suppressed[slot_name] = previous_suppressed
-        _look_state.empty[slot_name] = previous_empty
-        repair_visual_after_state_restore()
-
-        return false, apply_error
-    end
-
-    return true
-end
-
-mod.npclook_empty_slot = function(slot_name)
-    local player = get_local_player()
-
-    if not player then
-        return false, loc("error_no_local_player")
-    end
-
-    if not valid_look_slot(slot_name) and not EXTRA_SLOTS.is_slot(slot_name, _look_state.extra_anchors) then
-        return false, loc("error_invalid_slot")
-    end
-
-    if _look_state.empty[slot_name] == true and _look_state.applied[slot_name] == nil and _look_state.suppressed[slot_name] == nil then
-        return true
-    end
-
-    local previous_applied = _look_state.applied[slot_name]
-    local previous_suppressed = _look_state.suppressed[slot_name]
-    local previous_empty = _look_state.empty[slot_name]
-
-    _look_state.applied[slot_name] = nil
-    _look_state.suppressed[slot_name] = nil
-    _look_state.empty[slot_name] = true
-
-    local applied_ok, apply_error = push_look(true)
-
-    if not applied_ok then
-        _look_state.applied[slot_name] = previous_applied
-        _look_state.suppressed[slot_name] = previous_suppressed
-        _look_state.empty[slot_name] = previous_empty
-        repair_visual_after_state_restore()
-        return false, apply_error
-    end
-
-    return true
+    return push_look()
 end
 
 mod.npclook_reset_all = function()
@@ -7547,6 +7664,16 @@ mod.npclook_reset_all = function()
 
     if not player then
         return false, loc("error_no_local_player")
+    end
+
+    -- Loadout pins reconcile on every sync; a vanilla character needs no restore or portrait refresh.
+    if not live_visual.has_active_look()
+        and next(_originals) == nil
+        and next(live_visual.managed_slots) == nil
+        and not _vanilla_restore_pending
+        and not _reapply_pending
+        and not extra_slot_runtime.has_units() then
+        return true, nil, false
     end
 
     live_visual.clear_look_intent()
@@ -7563,7 +7690,7 @@ mod.npclook_reset_all = function()
 
     mod.npclook_refresh_portrait()
 
-    return true, restored and nil or loc("error_slot_restore")
+    return true, restored and nil or loc("error_slot_restore"), true
 end
 
 -- Studio session
@@ -7574,7 +7701,7 @@ local STUDIO_ITEM_PAGE_SIZE = 8
 local STUDIO_SEARCH_MAX_LENGTH = 256
 local STUDIO_SOURCE_PAGE_SIZE = 9
 local STUDIO_HISTORY_LIMIT = 32
-local STUDIO_PREVIEW_ITEM_CACHE_LIMIT = 24
+local STUDIO_PREVIEW_ITEM_CACHE_LIMIT = 64
 
 -- Keep late helpers in one table so the chunk stays below Lua's local limit.
 local INTERNAL = {}
@@ -7654,25 +7781,36 @@ function INTERNAL.replace_suppression(applied, suppressed, empty)
     suppress_missing_slots(applied, suppressed, empty, REPLACE_GEAR_SLOTS)
 end
 
-function INTERNAL.cached_preview_item(session, slot_name, item_name, materials, variant_state, mask_state, opacity)
+function INTERNAL.cached_preview_item(session, slot_name, item_name, materials, variant_state, mask_state, opacity, mesh_state)
     local key = slot_name .. "|" .. item_name .. "|" .. EXTRA_SLOTS.material_list_signature(materials)
         .. "|" .. RAW_UNITS.variant_signature(variant_state)
         .. "|" .. MASKS.signature(mask_state)
         .. "|O:" .. tostring(util.normalize_opacity(opacity))
+        .. "|W:" .. MESHES.signature(mesh_state)
     local item = session.preview_items[key]
+    local order = session.preview_item_order
 
+    -- Hits move to the back so pieces still on the preview are never rebuilt.
     if item then
+        for i = #order, 1, -1 do
+            if order[i] == key then
+                table.remove(order, i)
+                break
+            end
+        end
+
+        order[#order + 1] = key
+
         return item
     end
 
-    item = make_item_instance(slot_name, item_name, materials, variant_state, mask_state, opacity)
+    item = make_item_instance(slot_name, item_name, materials, variant_state, mask_state, opacity, mesh_state)
 
     if not item then
         return nil
     end
 
     session.preview_items[key] = item
-    local order = session.preview_item_order
     order[#order + 1] = key
 
     if #order > STUDIO_PREVIEW_ITEM_CACHE_LIMIT then
@@ -7700,7 +7838,7 @@ function INTERNAL.preview_loadout_signature(loadout)
     return table.concat(slots, "\31")
 end
 
-function INTERNAL.build_state_loadout(player, applied, suppressed, empty, materials, variants, masks, opacity, session)
+function INTERNAL.build_state_loadout(player, applied, suppressed, empty, materials, variants, masks, opacity, meshes, session)
     local profile = safe_profile(player)
 
     if not profile then
@@ -7733,11 +7871,13 @@ function INTERNAL.build_state_loadout(player, applied, suppressed, empty, materi
             and not (empty and empty[slot_name])
             and ((applied and applied[slot_name]) or #EXTRA_SLOTS.normalize_materials(slot_materials) > 0
                 or type(masks) == "table" and masks[slot_name]
+                or type(meshes) == "table" and meshes[slot_name]
                 or util.normalize_opacity(type(opacity) == "table" and opacity[slot_name]) ~= util.opacity_default) then
             item = INTERNAL.cached_preview_item(session, slot_name, item_name, slot_materials,
                 type(variants) == "table" and variants[slot_name],
                 type(masks) == "table" and masks[slot_name],
-                type(opacity) == "table" and opacity[slot_name])
+                type(opacity) == "table" and opacity[slot_name],
+                type(meshes) == "table" and meshes[slot_name])
         end
 
         if item then
@@ -7748,7 +7888,7 @@ function INTERNAL.build_state_loadout(player, applied, suppressed, empty, materi
     return without_overlay_raw_slots(loadout, applied)
 end
 
-function INTERNAL.build_preview_extra_slots(player, applied, suppressed, empty, extra_anchors, extra_transforms, loadout, variants, opacity)
+function INTERNAL.build_preview_extra_slots(player, applied, suppressed, empty, extra_anchors, extra_transforms, loadout, variants, opacity, meshes)
     local profile = safe_profile(player)
 
     return extra_slot_runtime.preview_items(
@@ -7760,7 +7900,8 @@ function INTERNAL.build_preview_extra_slots(player, applied, suppressed, empty, 
         profile_breed_name(profile),
         loadout,
         variants,
-        opacity
+        opacity,
+        meshes
     )
 end
 
@@ -7898,6 +8039,14 @@ function INTERNAL.preview_has_attachment_cycle(player, applied, suppressed, empt
 end
 
 function INTERNAL.studio_item_is_applicable(session, item_name)
+    if session.item_mode == "assets" and CUSTOM_ASSETS.parse_entry_id(item_name) then
+        local engine_type = CUSTOM_ASSETS.parse_entry_id(item_name)
+
+        return (valid_look_slot(session.selected_slot)
+            or EXTRA_SLOTS.is_slot(session.selected_slot, session.extra_anchors))
+            and #INTERNAL.asset_slot_options(engine_type) > 0
+    end
+
     if session.item_mode == "nodes" then
         return INTERNAL.attachment_node_available(session, item_name)
     elseif session.item_mode == "materials" then
@@ -7927,7 +8076,7 @@ function INTERNAL.studio_item_is_applicable(session, item_name)
 
     if raw_unit then
         local resource = item.base_unit or item.name
-        applicable = RAW_UNITS.is_resource(resource)
+        applicable = RAW_UNITS.is_resource(resource) and RAW_UNITS.resource_loadable(resource)
     elseif applicable and is_extra_slot then
         applicable = util.item_has_visual_base(item, breed_name)
     end
@@ -7940,7 +8089,8 @@ end
 function INTERNAL.preview_candidate_is_safe(session, item_name)
     if session.item_mode == "nodes" then
         return INTERNAL.attachment_node_available(session, item_name)
-    elseif session.item_mode == "materials" then
+    elseif session.item_mode == "materials"
+        or session.item_mode == "assets" and CUSTOM_ASSETS.parse_entry_id(item_name) then
         return INTERNAL.studio_item_is_applicable(session, item_name)
     end
 
@@ -7971,6 +8121,7 @@ function INTERNAL.history_snapshot(session)
         variants = RAW_UNITS.clone_variant_map(session.variants),
         masks = MASKS.clone_map(session.masks),
         opacity = util.clone_opacity_map(session.opacity),
+        meshes = MESHES.clone_map(session.meshes),
     }
 end
 
@@ -7993,6 +8144,7 @@ function INTERNAL.history_state_matches(session, snapshot)
         and EXTRA_SLOTS.same_material_maps(session.materials, snapshot and snapshot.materials)
         and RAW_UNITS.same_variant_maps(session.variants, snapshot and snapshot.variants)
         and MASKS.same_maps(session.masks, snapshot and snapshot.masks)
+        and MESHES.same_maps(session.meshes, snapshot and snapshot.meshes)
         and util.same_opacity_maps(session.opacity, snapshot and snapshot.opacity)
 end
 
@@ -8016,6 +8168,7 @@ function INTERNAL.restore_history_snapshot(session, snapshot)
     session.variants = RAW_UNITS.clone_variant_map(snapshot and snapshot.variants)
     session.masks = MASKS.clone_map(snapshot and snapshot.masks)
     session.opacity = util.clone_opacity_map(snapshot and snapshot.opacity)
+    session.meshes = MESHES.clone_map(snapshot and snapshot.meshes)
     table.clear(session.detected_material_slots)
     session.material_target = nil
 
@@ -8047,6 +8200,8 @@ function INTERNAL.studio_dirty_count(session)
                 ~= RAW_UNITS.variant_signature(session.live_variants[slot_name])
             or MASKS.signature(session.masks[slot_name])
                 ~= MASKS.signature(session.live_masks[slot_name])
+            or MESHES.signature(session.meshes[slot_name])
+                ~= MESHES.signature(session.live_meshes[slot_name])
             or util.normalize_opacity(session.opacity[slot_name])
                 ~= util.normalize_opacity(session.live_opacity[slot_name]) then
             count = count + 1
@@ -8076,12 +8231,13 @@ function INTERNAL.stage_outfit(session, outfit, replace)
 
         if valid_look_slot(slot_name) and item and not util.item_is_2d(item, item_name) then
             local current_item = session.applied[slot_name]
-                or INTERNAL.original_item_name(session.source_loadout, slot_name)
+                or INTERNAL.original_item_name(INTERNAL.session_source_loadout(session), slot_name)
 
             if current_item ~= item_name then
                 session.materials[slot_name] = nil
                 session.variants[slot_name] = nil
                 session.masks[slot_name] = nil
+                session.meshes[slot_name] = nil
             end
 
             session.applied[slot_name] = item_name
@@ -8161,12 +8317,20 @@ function INTERNAL.original_item_name(source_loadout, slot_name)
     return item and item.name
 end
 
+-- The native loadout follows the live profile, which can change while Studio is open.
+function INTERNAL.session_source_loadout(session)
+    local profile = session and safe_profile(session.player)
+
+    return profile and profile.loadout or nil
+end
+
 function INTERNAL.selected_visual_item_name(session)
     if not session then
         return nil
     end
 
-    if session.item_mode ~= "materials" and session.item_mode ~= "nodes" and session.selected_item then
+    if session.item_mode ~= "materials" and session.item_mode ~= "nodes" and session.selected_item
+        and not INTERNAL.selected_asset_material(session) then
         return session.selected_item
     end
 
@@ -8177,7 +8341,7 @@ function INTERNAL.selected_visual_item_name(session)
     end
 
     return session.applied[slot_name]
-        or INTERNAL.original_item_name(session.source_loadout, slot_name)
+        or INTERNAL.original_item_name(INTERNAL.session_source_loadout(session), slot_name)
 end
 
 function EXTRA_SLOTS.material_list_with_preview(materials, preview_item, target)
@@ -8206,14 +8370,18 @@ function EXTRA_SLOTS.material_list_with_preview(materials, preview_item, target)
     return EXTRA_SLOTS.normalize_materials(list)
 end
 
-function EXTRA_SLOTS.selected_preview_material_item(session)
-    if session.item_mode ~= "materials" then
-        return nil
-    end
-
+-- The material the user last clicked, while it is still the selected library row.
+function INTERNAL.clicked_preview_material(session)
     local preview_item = session.preview_material_item
 
-    if type(preview_item) ~= "string" or preview_item == "" or preview_item ~= session.selected_item then
+    if type(preview_item) ~= "string" or preview_item == "" then
+        return nil
+    elseif session.item_mode == "assets" then
+        if not INTERNAL.selected_asset_material(session)
+            or preview_item ~= INTERNAL.asset_material_item(session, session.selected_item) then
+            return nil
+        end
+    elseif session.item_mode ~= "materials" or preview_item ~= session.selected_item then
         return nil
     end
 
@@ -8224,6 +8392,73 @@ function EXTRA_SLOTS.selected_preview_material_item(session)
     end
 
     return preview_item
+end
+
+-- A selected mesh previews the material on that mesh only.
+function EXTRA_SLOTS.selected_preview_material_item(session)
+    if INTERNAL.mesh_material_mode(session) then
+        return nil
+    end
+
+    return INTERNAL.clicked_preview_material(session)
+end
+
+function INTERNAL.selected_preview_mesh_material(session)
+    if not INTERNAL.mesh_material_mode(session) then
+        return nil
+    end
+
+    local preview_item = INTERNAL.clicked_preview_material(session)
+    local override = preview_item and EXTRA_SLOTS.material_override_item(item_cache() or {}, preview_item)
+
+    return MESHES.supports_override(override) and preview_item or nil
+end
+
+function INTERNAL.effective_preview_meshes(session)
+    local preview_item = INTERNAL.selected_preview_mesh_material(session)
+
+    if not preview_item then
+        return session.meshes
+    end
+
+    local state, slot_name = INTERNAL.selected_mesh_state(session, true)
+
+    if not state then
+        return session.meshes
+    end
+
+    local meshes = MESHES.clone_map(session.meshes)
+    state = MESHES.clone_state(state) or {
+        item_name = state.item_name,
+        hidden = {},
+        materials = {},
+    }
+    state.materials[session.selected_mesh] = EXTRA_SLOTS.material_list_with_preview(
+        state.materials[session.selected_mesh],
+        preview_item,
+        nil
+    )
+    meshes[slot_name] = MESHES.normalize_state(state, state.item_name)
+
+    return meshes
+end
+
+-- A clicked piece previews visibly even when its slot is hidden.
+function INTERNAL.effective_preview_opacity(session)
+    local slot_name = session.selected_slot
+
+    if not session.preview_item or util.normalize_opacity(session.opacity[slot_name]) ~= 0 then
+        return session.opacity
+    end
+
+    local opacity = util.clone_opacity_map(session.opacity)
+    local entry = session.hidden_opacity_restore[slot_name]
+    local restore = type(entry) == "table" and entry.item_name == session.preview_item
+        and util.normalize_opacity(entry.opacity) or util.opacity_default
+
+    opacity[slot_name] = restore ~= 0 and restore ~= util.opacity_default and restore or nil
+
+    return opacity
 end
 
 function EXTRA_SLOTS.effective_preview_material_state(session)
@@ -8270,6 +8505,8 @@ end
 function INTERNAL.preview_visual_signature(session)
     local applied, suppressed, empty = INTERNAL.effective_preview_state(session)
     local effective_materials, effective_extra_transforms = EXTRA_SLOTS.effective_preview_material_state(session)
+    local effective_opacity = INTERNAL.effective_preview_opacity(session)
+    local effective_meshes = INTERNAL.effective_preview_meshes(session)
     local profile = safe_profile(session.player)
     local source_loadout = profile and profile.loadout or {}
     local signature = {}
@@ -8294,7 +8531,8 @@ function INTERNAL.preview_visual_signature(session)
         signature[i] = signature[i]
             .. "|V:" .. RAW_UNITS.variant_signature(session.variants[slot_name])
             .. "|K:" .. MASKS.signature(session.masks[slot_name])
-            .. "|O:" .. tostring(util.normalize_opacity(session.opacity[slot_name]))
+            .. "|O:" .. tostring(util.normalize_opacity(effective_opacity[slot_name]))
+            .. "|W:" .. MESHES.signature(effective_meshes[slot_name])
     end
 
     return table.concat(signature, "\31")
@@ -8488,6 +8726,142 @@ function INTERNAL.attachment_node_available(session, node_name)
     return false
 end
 
+local ASSET_TYPE_LABEL_KEYS = {
+    unit = "ui_asset_unit",
+    texture = "ui_asset_texture",
+    material = "ui_asset_material",
+}
+
+function INTERNAL.asset_entries(session)
+    if session.asset_entries then
+        return session.asset_entries
+    end
+
+    local entries = {}
+    local assets = CUSTOM_ASSETS.entries()
+
+    for i = 1, #assets do
+        local asset = assets[i]
+
+        entries[#entries + 1] = {
+            name = CUSTOM_ASSETS.entry_id(asset),
+            label = asset.label,
+            sub = loc(ASSET_TYPE_LABEL_KEYS[asset.engine_type] or "ui_asset_unit"),
+            variant_search = asset.name,
+        }
+    end
+
+    session.asset_entries = entries
+
+    return entries
+end
+
+-- Lua cannot list a material's variables, so common shader names and typed names come first.
+INTERNAL.asset_texture_slot_suggestions = {
+    "texture_map",
+    "diffuse_map",
+    "normal",
+    "mask",
+    "detail",
+    "noise",
+    "gradient_map",
+    "flow_map",
+    "distortion_map",
+    "effect_mask",
+    "effect_gradient",
+    "color_transition_mask",
+    "fur_color_gradient",
+}
+
+INTERNAL.typed_asset_slots = {
+    texture = {},
+    material = {},
+}
+INTERNAL.typed_asset_slot_revision = 0
+
+function INTERNAL.asset_slot_options(engine_type)
+    local catalog = studio_item_catalog()
+
+    if not catalog then
+        return {}
+    end
+
+    local key = engine_type == "material" and "material" or "texture"
+    local cached = catalog.asset_slot_options and catalog.asset_slot_options[key]
+
+    if cached and cached.revision == INTERNAL.typed_asset_slot_revision then
+        return cached.options
+    end
+
+    local options = {}
+    local seen = {}
+
+    local function add_all(values)
+        for i = 1, #(values or {}) do
+            local value = values[i]
+
+            if type(value) == "string" and value ~= "" and not seen[value] then
+                seen[value] = true
+                options[#options + 1] = value
+            end
+        end
+    end
+
+    add_all(INTERNAL.typed_asset_slots[key])
+
+    if key == "texture" then
+        add_all(INTERNAL.asset_texture_slot_suggestions)
+        add_all(catalog.texture_slots)
+    else
+        add_all(catalog.material_slots)
+    end
+
+    catalog.asset_slot_options = catalog.asset_slot_options or {}
+    catalog.asset_slot_options[key] = {
+        revision = INTERNAL.typed_asset_slot_revision,
+        options = options,
+    }
+
+    return options
+end
+
+function INTERNAL.selected_asset_slot(session, engine_type)
+    local options = INTERNAL.asset_slot_options(engine_type)
+    local index = session.asset_slot_index[engine_type] or 1
+
+    index = math.clamp(index, 1, math.max(#options, 1))
+    session.asset_slot_index[engine_type] = index
+
+    return options[index], index, #options
+end
+
+-- Custom textures and materials apply through a synthetic override item per material slot.
+function INTERNAL.asset_material_item(session, entry_id)
+    local engine_type, resource = CUSTOM_ASSETS.parse_entry_id(entry_id)
+
+    if not engine_type then
+        return nil
+    end
+
+    local material_slot = INTERNAL.selected_asset_slot(session, engine_type)
+    local item_name = CUSTOM_ASSETS.material_item_name(engine_type, material_slot, resource)
+    local cache = item_cache()
+
+    if not item_name or not cache or not CUSTOM_ASSETS.ensure_material_item(cache, item_name) then
+        return nil
+    end
+
+    return item_name
+end
+
+function INTERNAL.selected_asset_material(session)
+    if session.item_mode ~= "assets" then
+        return nil
+    end
+
+    return CUSTOM_ASSETS.parse_entry_id(session.selected_item)
+end
+
 function INTERNAL.raw_item_entries(session, catalog)
     if session.item_mode == "nodes" then
         return INTERNAL.attachment_node_entries(session)
@@ -8496,6 +8870,8 @@ function INTERNAL.raw_item_entries(session, catalog)
             or EXTRA_SLOTS.is_slot(session.selected_slot, session.extra_anchors)) and (catalog.materials or {}) or {}
     elseif session.item_mode == "all" then
         return catalog.all or {}
+    elseif session.item_mode == "assets" then
+        return INTERNAL.asset_entries(session)
     elseif session.item_mode == "units" then
         if not RAW_UNITS.available() then
             return {}
@@ -8607,7 +8983,9 @@ function INTERNAL.selected_item_entries(session, catalog)
 
     for i = 1, #entries do
         local entry = entries[i]
-        local haystack = INTERNAL.item_search_text(entry)
+        -- Entries are rebuilt with the catalog, so their search text is computed once.
+        local haystack = entry.search_text or INTERNAL.item_search_text(entry)
+        entry.search_text = haystack
         local matches = true
 
         for j = 1, #terms do
@@ -8677,8 +9055,17 @@ function INTERNAL.begin_studio_session(player)
         live_variants = RAW_UNITS.clone_variant_map(live.variants),
         masks = MASKS.clone_map(live.masks),
         live_masks = MASKS.clone_map(live.masks),
+        meshes = MESHES.clone_map(live.meshes),
+        live_meshes = MESHES.clone_map(live.meshes),
+        studio_tab = "look",
+        selected_mesh = nil,
+        mesh_page = 1,
+        mesh_inventory = {},
         opacity = util.clone_opacity_map(live.opacity),
         live_opacity = util.clone_opacity_map(live.opacity),
+        hidden_opacity_restore = INTERNAL.hidden_opacity_restore,
+        asset_slot_index = {},
+        asset_entries = nil,
         selected_slot = "slot_gear_upperbody",
         slot_page = 1,
         selected_item = nil,
@@ -8720,7 +9107,7 @@ function INTERNAL.begin_studio_session(player)
     return true
 end
 
-mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, extra_transforms, materials, variants, masks, opacity)
+mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, extra_transforms, materials, variants, masks, opacity, meshes)
     local player = get_local_player()
 
     if not player then
@@ -8744,6 +9131,21 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
     local validated_variants = RAW_UNITS.clone_variant_map(variants or _look_state.variants)
     local validated_masks = MASKS.clone_map(masks or _look_state.masks)
     local validated_opacity = util.clone_opacity_map(opacity or _look_state.opacity)
+    local validated_meshes = MESHES.clone_map(meshes or _look_state.meshes)
+    local native_loadout = profile and profile.loadout or {}
+
+    -- Inherited native pieces can carry masks and mesh edits without an explicit override.
+    local function committed_item_name(slot_name)
+        local item_name = validated_applied[slot_name]
+
+        if item_name or not valid_look_slot(slot_name) then
+            return item_name
+        end
+
+        local native_item = native_loadout[slot_name]
+
+        return type(native_item) == "table" and native_item.name or type(native_item) == "string" and native_item or nil
+    end
 
     for id, anchor in pairs(extra_anchors or _look_state.extra_anchors) do
 
@@ -8829,7 +9231,7 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
         if not valid_look_slot(slot_name) then
             validated_masks[slot_name] = nil
         else
-            local item_name = validated_applied[slot_name]
+            local item_name = committed_item_name(slot_name)
             local item = item_name and item_definition(item_name)
             local available = item and MASKS.available_fields(item, cache, slot_name) or {}
             local normalized = item and MASKS.normalize_state(state_value, item_name, available) or nil
@@ -8850,6 +9252,13 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
             else
                 validated_masks[slot_name] = normalized
             end
+        end
+    end
+
+    for slot_name, state_value in pairs(validated_meshes) do
+        if not valid_look_slot(slot_name) and not EXTRA_SLOTS.is_slot(slot_name, validated_extra_anchors)
+            or state_value.item_name ~= committed_item_name(slot_name) then
+            validated_meshes[slot_name] = nil
         end
     end
 
@@ -8885,6 +9294,7 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
         and EXTRA_SLOTS.same_material_maps(validated_materials, _look_state.materials)
         and RAW_UNITS.same_variant_maps(validated_variants, _look_state.variants)
         and MASKS.same_maps(validated_masks, _look_state.masks)
+        and MESHES.same_maps(validated_meshes, _look_state.meshes)
         and util.same_opacity_maps(validated_opacity, _look_state.opacity) then
         local current_ok = live_visual.matches(player)
 
@@ -8892,7 +9302,7 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
             return true
         end
 
-        local reapplied, reapply_error = push_look(true)
+        local reapplied, reapply_error = push_look()
 
         return reapplied, reapply_error
     end
@@ -8906,6 +9316,7 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
     local previous_variants = RAW_UNITS.clone_variant_map(_look_state.variants)
     local previous_masks = MASKS.clone_map(_look_state.masks)
     local previous_opacity = util.clone_opacity_map(_look_state.opacity)
+    local previous_meshes = MESHES.clone_map(_look_state.meshes)
 
     local removed_slots = {}
 
@@ -8913,6 +9324,7 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
         if not validated_applied[slot_name] and not validated_suppressed[slot_name]
             and not validated_empty[slot_name] and not validated_materials[slot_name]
             and not validated_masks[slot_name]
+            and not validated_meshes[slot_name]
             and util.normalize_opacity(validated_opacity[slot_name]) == util.opacity_default then
             removed_slots[slot_name] = true
         end
@@ -8928,6 +9340,7 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
         _look_state.variants = RAW_UNITS.clone_variant_map(previous_variants)
         _look_state.masks = MASKS.clone_map(previous_masks)
         _look_state.opacity = util.clone_opacity_map(previous_opacity)
+        _look_state.meshes = MESHES.clone_map(previous_meshes)
         repair_visual_after_state_restore()
         return false, loc("error_restore_removed")
     end
@@ -8941,8 +9354,9 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
     _look_state.variants = RAW_UNITS.clone_variant_map(validated_variants)
     _look_state.masks = MASKS.clone_map(validated_masks)
     _look_state.opacity = util.clone_opacity_map(validated_opacity)
+    _look_state.meshes = MESHES.clone_map(validated_meshes)
 
-    local applied_ok, apply_error = push_look(true)
+    local applied_ok, apply_error = push_look()
 
     if applied_ok then
         _reapply_pending = false
@@ -8960,6 +9374,7 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
     _look_state.variants = RAW_UNITS.clone_variant_map(previous_variants)
     _look_state.masks = MASKS.clone_map(previous_masks)
     _look_state.opacity = util.clone_opacity_map(previous_opacity)
+    _look_state.meshes = MESHES.clone_map(previous_meshes)
     repair_visual_after_state_restore()
 
     return false, loc("error_visual_apply", tostring(apply_error or loc("generic_unknown_error")))
@@ -8967,14 +9382,14 @@ end
 
 mod.npclook_import_code = function(code)
     local applied, suppressed, empty, count_or_error, _, extra_anchors, extra_transforms,
-        materials, variants, masks, opacity = decode_look_code(code)
+        materials, variants, masks, opacity, meshes = decode_look_code(code)
 
     if not applied then
         return false, count_or_error
     end
 
     local ok, err = mod.npclook_commit_state(
-        applied, suppressed, empty, extra_anchors, extra_transforms, materials, variants, masks, opacity
+        applied, suppressed, empty, extra_anchors, extra_transforms, materials, variants, masks, opacity, meshes
     )
 
     if not ok then
@@ -8995,6 +9410,7 @@ function INTERNAL.finalize_studio_session(session)
     _studio_session = nil
     _studio_item_catalog = nil
     RAW_UNITS.release_transient_cache()
+    CUSTOM_ASSETS.release_cache()
 
     return true
 end
@@ -9097,6 +9513,139 @@ function EXTRA_SLOTS.set_selected_materials(session, materials)
     end
 end
 
+local STUDIO_MESH_PAGE_SIZE = 11
+
+-- A mesh selection only targets the slot it was made on.
+function INTERNAL.mesh_material_mode(session)
+    return session.studio_tab == "meshes" and type(session.selected_mesh) == "string"
+        and session.selected_mesh_slot == session.selected_slot
+end
+
+function INTERNAL.selected_mesh_state(session, create)
+    local slot_name = session.selected_slot
+    local item_name = INTERNAL.slot_visual_item_name(session, slot_name)
+
+    if not item_name then
+        return nil, slot_name
+    end
+
+    local state = MESHES.normalize_state(session.meshes[slot_name], item_name)
+
+    if not state and create then
+        state = {
+            item_name = item_name,
+            hidden = {},
+            materials = {},
+        }
+    end
+
+    return state, slot_name, item_name
+end
+
+function INTERNAL.store_mesh_state(session, slot_name, state)
+    session.meshes[slot_name] = state and MESHES.normalize_state(state, state.item_name) or nil
+end
+
+-- Materials shown and toggled for the current target: one mesh in the Meshes tab, else the slot.
+function INTERNAL.active_materials(session)
+    if INTERNAL.mesh_material_mode(session) then
+        local state = INTERNAL.selected_mesh_state(session, false)
+
+        return state and table.clone(state.materials[session.selected_mesh] or {}) or {}
+    end
+
+    return EXTRA_SLOTS.selected_materials(session)
+end
+
+function INTERNAL.active_material_entry(session, material_item)
+    return EXTRA_SLOTS.material_entry(
+        material_item,
+        not INTERNAL.mesh_material_mode(session) and session.material_target or nil
+    )
+end
+
+function INTERNAL.set_active_materials(session, materials)
+    if not INTERNAL.mesh_material_mode(session) then
+        EXTRA_SLOTS.set_selected_materials(session, materials)
+        return true
+    end
+
+    local state, slot_name = INTERNAL.selected_mesh_state(session, true)
+
+    if not state then
+        return false
+    end
+
+    state.materials[session.selected_mesh] = EXTRA_SLOTS.normalize_materials(materials)
+    INTERNAL.store_mesh_state(session, slot_name, state)
+
+    return true
+end
+
+function EXTRA_SLOTS.report_mesh_inventory(slot_name, rows)
+    local session = _studio_session
+
+    if not session or session.closing == true or (not valid_look_slot(slot_name)
+        and not EXTRA_SLOTS.is_slot(slot_name, session.extra_anchors)) then
+        return false
+    end
+
+    local result = {}
+
+    for i = 1, math.min(#(rows or {}), 512) do
+        local row = rows[i]
+
+        if type(row) == "table" and MESHES.valid_key(row.key) then
+            result[#result + 1] = {
+                key = row.key,
+                scope = tostring(row.scope or "root"),
+                index = tonumber(row.index) or 1,
+                material_count = tonumber(row.material_count) or 0,
+            }
+        end
+    end
+
+    session.mesh_inventory[slot_name] = result
+
+    return true
+end
+
+function INTERNAL.mesh_label(key)
+    local scope, index = MESHES.key_parts(key)
+
+    if not scope then
+        return nil
+    end
+
+    local scope_label = scope == "root" and loc("ui_mesh_base") or string.upper(INTERNAL.display_token(scope))
+
+    return string.format("%s %02d  %s", loc("ui_mesh"), index, scope_label)
+end
+
+function INTERNAL.mesh_rows(session)
+    local inventory = session.mesh_inventory[session.selected_slot] or {}
+    local state = INTERNAL.selected_mesh_state(session, false)
+
+    session.mesh_page, session.mesh_page_count = INTERNAL.clamp_page(session.mesh_page, #inventory, STUDIO_MESH_PAGE_SIZE)
+
+    local rows = {}
+
+    for _, entry in ipairs(INTERNAL.page_slice(inventory, session.mesh_page, STUDIO_MESH_PAGE_SIZE)) do
+        local hidden = state and state.hidden[entry.key] == true
+        local overrides = state and #(state.materials[entry.key] or {}) or 0
+
+        rows[#rows + 1] = {
+            id = entry.key,
+            label = INTERNAL.mesh_label(entry.key),
+            sub = loc("ui_mesh_details", entry.material_count, overrides),
+            selected = session.selected_mesh == entry.key,
+            hidden = hidden,
+        }
+    end
+
+    return rows, #inventory
+end
+
 function INTERNAL.studio_snapshot()
     local session = _studio_session
 
@@ -9112,7 +9661,8 @@ function INTERNAL.studio_snapshot()
 
     session.player = player
 
-    if session.item_mode == "units" and not RAW_UNITS.available() then
+    if (session.item_mode == "units" or session.item_mode == "assets") and not RAW_UNITS.available()
+        or session.item_mode == "assets" and not CUSTOM_ASSETS.available() then
         session.item_mode = "slot"
         session.item_page = 1
         session.item_search_cache_key = nil
@@ -9151,10 +9701,12 @@ function INTERNAL.studio_snapshot()
                 session.extra_transforms[session.selected_slot]
             ).attach_node
             selected = selected or current_node == entry.name
-        elseif session.item_mode == "materials" then
-            local material_entry = EXTRA_SLOTS.material_entry(entry.name, session.material_target)
+        elseif session.item_mode == "materials" or session.item_mode == "assets" and CUSTOM_ASSETS.parse_entry_id(entry.name) then
+            local material_item = session.item_mode == "materials" and entry.name
+                or INTERNAL.asset_material_item(session, entry.name)
+            local material_entry = INTERNAL.active_material_entry(session, material_item)
             local applied_material = material_entry
-                and table.contains(EXTRA_SLOTS.selected_materials(session), material_entry)
+                and table.contains(INTERNAL.active_materials(session), material_entry)
             selected = selected or applied_material
             slot_hint = applied_material and loc("ui_material_applied", slot_hint) or slot_hint
         end
@@ -9187,7 +9739,7 @@ function INTERNAL.studio_snapshot()
         local slot_name = slot_order[i]
         local is_extra = EXTRA_SLOTS.is_slot(slot_name, session.extra_anchors)
         local item_name = session.applied[slot_name]
-        local hidden = session.suppressed[slot_name] == true
+        local hidden = INTERNAL.slot_is_hidden(session, slot_name)
         local empty = session.empty[slot_name] == true
         local inherited = not is_extra and INTERNAL.original_item_name(source_loadout, slot_name) or nil
         local display_name = item_name or inherited
@@ -9204,6 +9756,8 @@ function INTERNAL.studio_snapshot()
                 ~= RAW_UNITS.variant_signature(session.live_variants[slot_name])
             or MASKS.signature(session.masks[slot_name])
                 ~= MASKS.signature(session.live_masks[slot_name])
+            or MESHES.signature(session.meshes[slot_name])
+                ~= MESHES.signature(session.live_meshes[slot_name])
             or util.normalize_opacity(session.opacity[slot_name])
                 ~= util.normalize_opacity(session.live_opacity[slot_name])
 
@@ -9280,7 +9834,19 @@ function INTERNAL.studio_snapshot()
         material_targets[#material_targets + 1] = detected_targets[i]
     end
 
-    local selected_materials = EXTRA_SLOTS.selected_materials(session)
+    if session.selected_mesh_slot ~= session.selected_slot then
+        session.selected_mesh = nil
+        session.selected_mesh_slot = nil
+        session.mesh_page = 1
+    end
+
+    local selected_materials = INTERNAL.active_materials(session)
+    local mesh_rows, mesh_count
+
+    if session.studio_tab == "meshes" then
+        mesh_rows, mesh_count = INTERNAL.mesh_rows(session)
+    end
+
     local selected_material_displays = {}
 
     for i = 1, #selected_materials do
@@ -9354,6 +9920,18 @@ function INTERNAL.studio_snapshot()
         selected_slot = session.selected_slot,
         selected_slot_label = EXTRA_SLOTS.label(session.selected_slot, session.extra_anchors),
         selected_opacity = util.normalize_opacity(session.opacity[session.selected_slot]),
+        selected_hidden = INTERNAL.slot_is_hidden(session, session.selected_slot),
+        clipboard_label = INTERNAL.slot_clipboard and INTERNAL.slot_clipboard.label or nil,
+        studio_tab = session.studio_tab,
+        mesh_rows = mesh_rows,
+        mesh_count = mesh_count or 0,
+        mesh_page = session.mesh_page,
+        mesh_page_count = session.mesh_page_count or 1,
+        selected_mesh = session.selected_mesh,
+        mesh_target_label = INTERNAL.mesh_material_mode(session) and INTERNAL.mesh_label(session.selected_mesh) or nil,
+        has_mesh_state = session.meshes[session.selected_slot] ~= nil,
+        can_edit_meshes = INTERNAL.slot_visual_item_name(session, session.selected_slot) ~= nil,
+        all_hidden = INTERNAL.all_slots_hidden(session),
         can_toggle_extra_first_person = EXTRA_SLOTS.is_slot(session.selected_slot, session.extra_anchors),
         can_toggle_extra_first_person_animation = EXTRA_SLOTS.is_slot(session.selected_slot, session.extra_anchors)
             and EXTRA_SLOTS.normalize_transform(session.extra_transforms[session.selected_slot]).first_person,
@@ -9380,6 +9958,21 @@ function INTERNAL.studio_snapshot()
         items = item_rows,
         item_mode = session.item_mode,
         can_use_units = RAW_UNITS.available(),
+        can_use_assets = RAW_UNITS.available() and CUSTOM_ASSETS.available(),
+        asset_material_selected = INTERNAL.selected_asset_material(session) ~= nil,
+        asset_slot_label = (function()
+            local engine_type = INTERNAL.selected_asset_material(session)
+
+            if not engine_type then
+                return nil
+            end
+
+            local material_slot, index, count = INTERNAL.selected_asset_slot(session, engine_type)
+
+            return material_slot and string.format("%s %d/%d: %s",
+                loc(engine_type == "material" and "ui_asset_material_slot" or "ui_asset_texture_slot"),
+                index, count, material_slot) or loc("ui_asset_no_slots")
+        end)(),
         item_page = session.item_page,
         item_page_count = session.item_page_count,
         item_result_count = #item_entries,
@@ -9443,6 +10036,7 @@ function INTERNAL.stage_slot_state(session, state)
     local previous = INTERNAL.history_snapshot(session)
     session.variants[slot_name] = nil
     session.masks[slot_name] = nil
+    session.meshes[slot_name] = nil
     session.opacity[slot_name] = nil
     session.applied[slot_name] = nil
     session.suppressed[slot_name] = state == "hidden" and true or nil
@@ -9506,6 +10100,11 @@ STUDIO_ACTIONS.cycle_item = function(session, action)
         session.preview_item = nil
         session.feedback = loc("feedback_selected_material", INTERNAL.display_token(entry.name))
         return
+    elseif session.item_mode == "assets" and CUSTOM_ASSETS.parse_entry_id(entry.name) then
+        session.preview_material_item = INTERNAL.asset_material_item(session, entry.name)
+        session.preview_item = nil
+        session.feedback = loc("feedback_selected_material", INTERNAL.display_token(entry.name))
+        return
     end
 
     session.preview_material_item = nil
@@ -9540,6 +10139,8 @@ STUDIO_ACTIONS.select_slot = function(session, action)
     end
 
     session.selected_slot = action.slot
+    session.selected_mesh = nil
+    session.mesh_page = 1
     session.camera_focus = nil
     session.preview_item = nil
     session.preview_material_item = nil
@@ -9583,56 +10184,106 @@ STUDIO_ACTIONS.set_opacity = function(session, action)
     session.feedback = loc("feedback_opacity_set", value)
 end
 
-STUDIO_ACTIONS.clone_slot = function(session)
-    local source_slot = session.selected_slot
-    local source_is_extra = EXTRA_SLOTS.is_slot(source_slot, session.extra_anchors)
-    local anchor = EXTRA_SLOTS.anchor(source_slot, session.extra_anchors)
+-- The slot clipboard outlives preset loads and Studio sessions until the mod reloads.
+INTERNAL.slot_clipboard = nil
+
+function INTERNAL.capture_slot(session, slot_name)
+    local is_extra = EXTRA_SLOTS.is_slot(slot_name, session.extra_anchors)
+    local anchor = EXTRA_SLOTS.anchor(slot_name, session.extra_anchors)
 
     if not valid_look_slot(anchor) then
-        session.feedback = loc("feedback_select_destination")
-        return false
+        return nil, loc("feedback_select_destination")
     end
 
-    local profile = safe_profile(session.player)
-    local source_loadout = profile and profile.loadout or {}
-    local item_name = session.applied[source_slot]
-        or (not source_is_extra and INTERNAL.original_item_name(source_loadout, source_slot))
-    local hidden = session.suppressed[source_slot] == true
-    local empty = session.empty[source_slot] == true
+    local hidden = session.suppressed[slot_name] == true
+    local item_name = not hidden and INTERNAL.slot_visual_item_name(session, slot_name) or nil
 
-    if not hidden and not empty then
-        local item = item_name and item_definition(item_name)
-        local breed_name = profile_breed_name(profile)
+    if not item_name and not hidden then
+        return nil, loc("feedback_clone_slot_empty")
+    end
 
-        if not item then
-            session.feedback = loc("feedback_clone_slot_empty")
-            return false
-        elseif util.item_is_2d(item, item_name)
-            or item.npclook_raw_unit ~= true and not util.item_has_visual_base(item, breed_name) then
-            session.feedback = loc("error_visual_slot_unavailable")
-            return false
-        end
+    local transform = is_extra and EXTRA_SLOTS.normalize_transform(session.extra_transforms[slot_name]) or nil
+    local materials = is_extra and transform.materials or EXTRA_SLOTS.normalize_materials(session.materials[slot_name])
+
+    return {
+        source_slot = slot_name,
+        source_is_extra = is_extra,
+        anchor = anchor,
+        label = EXTRA_SLOTS.label(slot_name, session.extra_anchors),
+        item_name = item_name,
+        hidden = hidden,
+        transform = transform,
+        materials = materials,
+        variants = item_name and session.variants[slot_name]
+            and RAW_UNITS.normalize_variant_state(session.variants[slot_name], item_name) or nil,
+        masks = not is_extra and item_name and session.masks[slot_name]
+            and MASKS.clone_state(session.masks[slot_name]) or nil,
+        opacity = session.opacity[slot_name],
+        hidden_opacity_restore = session.hidden_opacity_restore[slot_name],
+        meshes = item_name and session.meshes[slot_name]
+            and MESHES.normalize_state(session.meshes[slot_name], item_name) or nil,
+    }
+end
+
+function INTERNAL.clipboard_item_usable(session, clip)
+    if not clip.item_name then
+        return true
+    end
+
+    local item = item_definition(clip.item_name)
+    local breed_name = profile_breed_name(safe_profile(session.player))
+
+    if not item then
+        return false, loc("feedback_clone_slot_empty")
+    elseif util.item_is_2d(item, clip.item_name)
+        or item.npclook_raw_unit ~= true and not util.item_has_visual_base(item, breed_name) then
+        return false, loc("error_visual_slot_unavailable")
+    end
+
+    return true
+end
+
+function INTERNAL.write_clip_to_slot(session, slot_name, clip)
+    local is_extra = EXTRA_SLOTS.is_slot(slot_name, session.extra_anchors)
+
+    session.applied[slot_name] = clip.item_name
+    session.suppressed[slot_name] = clip.hidden and true or nil
+    session.empty[slot_name] = not clip.item_name and not clip.hidden and true or nil
+    session.variants[slot_name] = clip.variants and RAW_UNITS.normalize_variant_state(clip.variants, clip.item_name) or nil
+    session.opacity[slot_name] = clip.opacity
+    session.hidden_opacity_restore[slot_name] = clip.hidden_opacity_restore
+    session.meshes[slot_name] = clip.meshes and MESHES.normalize_state(clip.meshes, clip.item_name) or nil
+
+    if is_extra then
+        local transform = clip.transform and EXTRA_SLOTS.normalize_transform(clip.transform)
+            or EXTRA_SLOTS.normalize_transform(session.extra_transforms[slot_name])
+
+        transform.materials = EXTRA_SLOTS.normalize_materials(clip.materials)
+        session.extra_transforms[slot_name] = EXTRA_SLOTS.normalize_transform(transform)
+        session.masks[slot_name] = nil
+    else
+        local materials = EXTRA_SLOTS.normalize_materials(clip.materials)
+        session.materials[slot_name] = #materials > 0 and materials or nil
+        -- Mask fields are authored per slot.
+        session.masks[slot_name] = clip.masks and clip.source_slot == slot_name
+            and MASKS.clone_state(clip.masks) or nil
+    end
+end
+
+function INTERNAL.paste_clip_as_extra(session, clip)
+    local usable, usable_error = INTERNAL.clipboard_item_usable(session, clip)
+
+    if not usable then
+        session.feedback = usable_error
+        return false
     end
 
     local previous = INTERNAL.history_snapshot(session)
     local id = EXTRA_SLOTS.next_id(session.extra_anchors)
-    local transform = source_is_extra
-        and EXTRA_SLOTS.normalize_transform(session.extra_transforms[source_slot])
-        or EXTRA_SLOTS.normalize_transform(nil)
 
-    if not source_is_extra then
-        transform.materials = EXTRA_SLOTS.normalize_materials(session.materials[source_slot])
-    end
-
-    session.extra_anchors[id] = anchor
-    session.extra_transforms[id] = EXTRA_SLOTS.normalize_transform(transform)
-    session.applied[id] = not hidden and not empty and item_name or nil
-    session.suppressed[id] = hidden and true or nil
-    session.empty[id] = empty and true or nil
-    session.variants[id] = session.variants[source_slot]
-        and RAW_UNITS.normalize_variant_state(session.variants[source_slot], item_name) or nil
-    session.masks[id] = nil
-    session.opacity[id] = session.opacity[source_slot]
+    session.extra_anchors[id] = clip.anchor
+    session.extra_transforms[id] = EXTRA_SLOTS.normalize_transform(clip.transform)
+    INTERNAL.write_clip_to_slot(session, id, clip)
 
     if INTERNAL.preview_has_attachment_cycle(session.player, session.applied, session.suppressed, session.empty) then
         INTERNAL.restore_history_snapshot(session, previous)
@@ -9651,7 +10302,91 @@ STUDIO_ACTIONS.clone_slot = function(session)
     session.variant_control_mode = "families"
     session.source_preview = nil
     INTERNAL.record_history_change(session, previous)
+
+    return true, id
+end
+
+STUDIO_ACTIONS.clone_slot = function(session)
+    local clip, clip_error = INTERNAL.capture_slot(session, session.selected_slot)
+
+    if not clip then
+        session.feedback = clip_error
+        return false
+    end
+
+    local ok, id = INTERNAL.paste_clip_as_extra(session, clip)
+
+    if not ok then
+        return false
+    end
+
     session.feedback = loc("feedback_slot_cloned", EXTRA_SLOTS.label(id, session.extra_anchors))
+end
+
+STUDIO_ACTIONS.copy_slot = function(session)
+    local clip, clip_error = INTERNAL.capture_slot(session, session.selected_slot)
+
+    if not clip then
+        session.feedback = clip_error
+        return false
+    end
+
+    INTERNAL.slot_clipboard = clip
+    session.feedback = loc("feedback_slot_copied", clip.label)
+end
+
+STUDIO_ACTIONS.paste_slot_extra = function(session)
+    local clip = INTERNAL.slot_clipboard
+
+    if not clip then
+        session.feedback = loc("feedback_clipboard_empty")
+        return false
+    end
+
+    local ok, id = INTERNAL.paste_clip_as_extra(session, clip)
+
+    if not ok then
+        return false
+    end
+
+    session.feedback = loc("feedback_slot_pasted", EXTRA_SLOTS.label(id, session.extra_anchors))
+end
+
+STUDIO_ACTIONS.paste_slot_into = function(session)
+    local clip = INTERNAL.slot_clipboard
+    local slot_name = session.selected_slot
+
+    if not clip then
+        session.feedback = loc("feedback_clipboard_empty")
+        return false
+    elseif not valid_look_slot(slot_name) and not EXTRA_SLOTS.is_slot(slot_name, session.extra_anchors) then
+        session.feedback = loc("feedback_select_destination")
+        return false
+    end
+
+    local usable, usable_error = INTERNAL.clipboard_item_usable(session, clip)
+
+    if not usable then
+        session.feedback = usable_error
+        return false
+    end
+
+    local previous = INTERNAL.history_snapshot(session)
+    INTERNAL.write_clip_to_slot(session, slot_name, clip)
+
+    if INTERNAL.preview_has_attachment_cycle(session.player, session.applied, session.suppressed, session.empty) then
+        INTERNAL.restore_history_snapshot(session, previous)
+        session.feedback = loc("feedback_preview_attachment_cycle")
+        return false
+    end
+
+    session.preview_item = nil
+    session.preview_material_item = nil
+    session.material_target = nil
+    session.selected_item = nil
+    session.source_preview = nil
+    INTERNAL.record_history_change(session, previous)
+    session.feedback = loc("feedback_slot_pasted", EXTRA_SLOTS.label(slot_name, session.extra_anchors))
 end
 
 STUDIO_ACTIONS.add_extra_slot = function(session)
@@ -9695,6 +10430,7 @@ STUDIO_ACTIONS.remove_extra_slot = function(session)
     session.materials[id] = nil
     session.variants[id] = nil
     session.masks[id] = nil
+    session.meshes[id] = nil
     session.opacity[id] = nil
     session.detected_material_slots[id] = nil
     session.applied[id] = nil
@@ -9727,6 +10463,7 @@ STUDIO_ACTIONS.remove_all_extra_slots = function(session)
         session.materials[id] = nil
         session.variants[id] = nil
         session.masks[id] = nil
+        session.meshes[id] = nil
         session.opacity[id] = nil
         session.detected_material_slots[id] = nil
         session.applied[id] = nil
@@ -10172,8 +10909,11 @@ STUDIO_ACTIONS.cycle_mask_value = function(session, action)
 end
 
 STUDIO_ACTIONS.item_mode = function(session, action)
-    if action.mode == "units" and not RAW_UNITS.available() then
+    if (action.mode == "units" or action.mode == "assets") and not RAW_UNITS.available() then
         session.feedback = loc("feedback_units_require_resource_loader")
+        return false
+    elseif action.mode == "assets" and not CUSTOM_ASSETS.available() then
+        session.feedback = loc("feedback_assets_unavailable")
         return false
     elseif action.mode == "nodes" and not INTERNAL.node_library_available(session) then
         session.feedback = loc("feedback_nodes_unavailable")
@@ -10186,6 +10926,7 @@ STUDIO_ACTIONS.item_mode = function(session, action)
         or action.mode == "nodes" and "nodes"
         or action.mode == "all" and "all"
         or action.mode == "units" and "units"
+        or action.mode == "assets" and "assets"
         or "slot"
     session.selected_item = nil
     session.preview_item = nil
@@ -10204,6 +10945,130 @@ STUDIO_ACTIONS.item_mode = function(session, action)
     session.item_search_cache_key = nil
     session.item_search_results = nil
     session.feedback = loc("feedback_library_mode", LIBRARY_MODE_LABELS[session.item_mode] or LIBRARY_MODE_LABELS.slot)
+end
+
+STUDIO_ACTIONS.cycle_asset_slot = function(session, action)
+    local engine_type = INTERNAL.selected_asset_material(session)
+    local options = engine_type and INTERNAL.asset_slot_options(engine_type) or {}
+
+    if #options <= 1 then
+        return false
+    end
+
+    local _, index = INTERNAL.selected_asset_slot(session, engine_type)
+
+    session.asset_slot_index[engine_type] = (index - 1 + INTERNAL.signed_delta(action.delta, 1)) % #options + 1
+    session.preview_material_item = INTERNAL.asset_material_item(session, session.selected_item)
+    session.feedback = loc("feedback_asset_slot", tostring(options[session.asset_slot_index[engine_type]]))
+end
+
+-- The search box doubles as the slot name field for custom textures and materials.
+STUDIO_ACTIONS.type_asset_slot = function(session)
+    local engine_type = INTERNAL.selected_asset_material(session)
+    local value = string.lower(string.gsub(tostring(session.item_search or ""), "^%s*(.-)%s*$", "%1"))
+
+    if not engine_type then
+        return false
+    elseif value == "" or #value > 96 or not string.match(value, "^[%w_]+$") then
+        session.feedback = loc("feedback_asset_slot_type_hint")
+        return false
+    end
+
+    local key = engine_type == "material" and "material" or "texture"
+    local typed = INTERNAL.typed_asset_slots[key]
+
+    for i = #typed, 1, -1 do
+        if typed[i] == value then
+            table.remove(typed, i)
+        end
+    end
+
+    table.insert(typed, 1, value)
+
+    while #typed > 16 do
+        table.remove(typed)
+    end
+
+    INTERNAL.typed_asset_slot_revision = INTERNAL.typed_asset_slot_revision + 1
+    session.asset_slot_index[engine_type] = 1
+    session.preview_material_item = INTERNAL.asset_material_item(session, session.selected_item)
+    session.feedback = loc("feedback_asset_slot", value)
+end
+
+STUDIO_ACTIONS.studio_tab = function(session, action)
+    local tab = action.tab == "meshes" and "meshes" or "look"
+
+    session.studio_tab = tab
+    session.selected_mesh = nil
+    session.mesh_page = 1
+    session.preview_material_item = nil
+
+    -- The Meshes tab pairs with a material library.
+    if tab == "meshes" and session.item_mode ~= "materials" and session.item_mode ~= "assets"
+        and (valid_look_slot(session.selected_slot) or EXTRA_SLOTS.is_slot(session.selected_slot, session.extra_anchors)) then
+        session.item_mode = "materials"
+        session.selected_item = nil
+        session.preview_item = nil
+        session.item_page = 1
+        session.item_search_cache_key = nil
+        session.item_search_results = nil
+    end
+
+    session.feedback = tab == "meshes" and loc("feedback_meshes_tab") or loc("feedback_look_tab")
+end
+
+STUDIO_ACTIONS.mesh_page = function(session, action)
+    session.mesh_page = (session.mesh_page or 1) + INTERNAL.signed_delta(action.delta)
+end
+
+STUDIO_ACTIONS.select_mesh = function(session, action)
+    if not MESHES.valid_key(action.mesh) then
+        return false
+    end
+
+    session.selected_mesh = (session.selected_mesh ~= action.mesh
+        or session.selected_mesh_slot ~= session.selected_slot) and action.mesh or nil
+    session.selected_mesh_slot = session.selected_slot
+    session.preview_material_item = nil
+    session.feedback = session.selected_mesh and loc("feedback_mesh_selected") or loc("feedback_mesh_cleared")
+end
+
+STUDIO_ACTIONS.toggle_mesh_hidden = function(session, action)
+    if not MESHES.valid_key(action.mesh) then
+        return false
+    end
+
+    local state, slot_name = INTERNAL.selected_mesh_state(session, true)
+
+    if not state then
+        session.feedback = loc("feedback_hide_nothing")
+        return false
+    end
+
+    local previous = INTERNAL.history_snapshot(session)
+    local hidden = not state.hidden[action.mesh]
+
+    state.hidden[action.mesh] = hidden or nil
+    INTERNAL.store_mesh_state(session, slot_name, state)
+    session.preview_item = nil
+    session.source_preview = nil
+    INTERNAL.record_history_change(session, previous)
+    session.feedback = hidden and loc("feedback_mesh_hidden") or loc("feedback_mesh_shown")
+end
+
+STUDIO_ACTIONS.reset_meshes = function(session)
+    local slot_name = session.selected_slot
+
+    if not session.meshes[slot_name] then
+        return false
+    end
+
+    local previous = INTERNAL.history_snapshot(session)
+    session.meshes[slot_name] = nil
+    session.preview_item = nil
+    session.source_preview = nil
+    INTERNAL.record_history_change(session, previous)
+    session.feedback = loc("feedback_meshes_reset")
 end
 
 STUDIO_ACTIONS.item_page = function(session, action)
@@ -10253,6 +11118,15 @@ STUDIO_ACTIONS.select_item = function(session, action)
         session.preview_material_item = nil
         session.source_preview = nil
         session.feedback = loc("feedback_previewing_node", node_name)
+        return
+    elseif session.item_mode == "assets" and CUSTOM_ASSETS.parse_entry_id(action.item) then
+        session.selected_item = action.item
+        session.source_preview = nil
+        session.preview_item = nil
+        session.preview_material_item = INTERNAL.asset_material_item(session, action.item)
+        session.feedback = session.preview_material_item
+            and loc("feedback_selected_material", INTERNAL.display_token(action.item))
+            or loc("feedback_asset_slot_missing")
         return
     elseif type(action.item) ~= "string" or not item_definition(action.item) then
         return false
@@ -10307,20 +11181,26 @@ STUDIO_ACTIONS.wear_item = function(session)
         INTERNAL.record_history_change(session, previous)
         session.feedback = loc("feedback_node_attached", node_name)
         return
-    elseif session.item_mode == "materials" then
+    elseif session.item_mode == "materials" or INTERNAL.selected_asset_material(session) then
         local id = session.selected_slot
+        local material_item = session.item_mode == "materials" and session.selected_item
+            or INTERNAL.asset_material_item(session, session.selected_item)
 
         if not valid_look_slot(id) and not EXTRA_SLOTS.is_slot(id, session.extra_anchors) then
             session.feedback = loc("feedback_select_destination")
             return false
-        elseif not session.selected_item or not INTERNAL.studio_item_is_applicable(session, session.selected_item) then
+        elseif not material_item or not INTERNAL.studio_item_is_applicable(session, session.selected_item) then
             session.feedback = loc("feedback_select_material")
+            return false
+        elseif INTERNAL.mesh_material_mode(session)
+            and not MESHES.supports_override(EXTRA_SLOTS.material_override_item(item_cache() or {}, material_item)) then
+            session.feedback = loc("feedback_mesh_material_unsupported")
             return false
         end
 
         local previous = INTERNAL.history_snapshot(session)
-        local slot_materials = EXTRA_SLOTS.selected_materials(session)
-        local selected_entry = EXTRA_SLOTS.material_entry(session.selected_item, session.material_target)
+        local slot_materials = INTERNAL.active_materials(session)
+        local selected_entry = INTERNAL.active_material_entry(session, material_item)
         local index
 
         for i = 1, #slot_materials do
@@ -10338,7 +11218,11 @@ STUDIO_ACTIONS.wear_item = function(session)
             session.feedback = loc("feedback_material_applied", EXTRA_SLOTS.material_display(selected_entry))
         end
 
-        EXTRA_SLOTS.set_selected_materials(session, slot_materials)
+        if not INTERNAL.set_active_materials(session, slot_materials) then
+            session.feedback = loc("feedback_select_piece")
+            return false
+        end
+
         session.preview_item = nil
         session.preview_material_item = nil
         session.source_preview = nil
@@ -10363,7 +11247,7 @@ STUDIO_ACTIONS.wear_item = function(session)
 
     local previous = INTERNAL.history_snapshot(session)
     local previous_item = session.applied[session.selected_slot]
-        or INTERNAL.original_item_name(session.source_loadout, session.selected_slot)
+        or INTERNAL.original_item_name(INTERNAL.session_source_loadout(session), session.selected_slot)
 
     if previous_item ~= session.selected_item then
         -- Component targets do not carry across cosmetic replacements.
@@ -10376,6 +11260,11 @@ STUDIO_ACTIONS.wear_item = function(session)
     session.applied[session.selected_slot] = session.selected_item
     session.suppressed[session.selected_slot] = nil
 
+    -- A freshly worn piece should be visible.
+    if util.normalize_opacity(session.opacity[session.selected_slot]) == 0 then
+        INTERNAL.set_slot_hidden(session, session.selected_slot, false)
+    end
+
     local selected_item = item_definition(session.selected_item)
     local variant_state = session.variants[session.selected_slot]
     if not selected_item or selected_item.npclook_raw_unit ~= true
@@ -10386,6 +11275,11 @@ STUDIO_ACTIONS.wear_item = function(session)
     local mask_state = session.masks[session.selected_slot]
     if not selected_item or type(mask_state) ~= "table" or mask_state.item_name ~= session.selected_item then
         session.masks[session.selected_slot] = nil
+    end
+
+    local mesh_state = session.meshes[session.selected_slot]
+    if type(mesh_state) ~= "table" or mesh_state.item_name ~= session.selected_item then
+        session.meshes[session.selected_slot] = nil
     end
 
     session.empty[session.selected_slot] = nil
@@ -10438,12 +11332,12 @@ STUDIO_ACTIONS.clear_materials = function(session)
         return false
     end
 
-    if #EXTRA_SLOTS.selected_materials(session) == 0 then
+    if #INTERNAL.active_materials(session) == 0 then
         return false
     end
 
     local previous = INTERNAL.history_snapshot(session)
-    EXTRA_SLOTS.set_selected_materials(session, {})
+    INTERNAL.set_active_materials(session, {})
     session.preview_item = nil
     session.preview_material_item = nil
     session.source_preview = nil
@@ -10452,10 +11346,79 @@ STUDIO_ACTIONS.clear_materials = function(session)
     session.feedback = loc("feedback_materials_cleared")
 end
 
-STUDIO_ACTIONS.hide_slot = function(session)
-    if INTERNAL.stage_slot_state(session, "hidden") then
-        session.feedback = loc("feedback_hidden_slot")
+function INTERNAL.slot_visual_item_name(session, slot_name)
+    if session.empty[slot_name] then
+        return nil
     end
+
+    return session.applied[slot_name]
+        or not EXTRA_SLOTS.is_slot(slot_name, session.extra_anchors)
+            and INTERNAL.original_item_name(INTERNAL.session_source_loadout(session), slot_name)
+        or nil
+end
+
+function INTERNAL.slot_is_hidden(session, slot_name)
+    return session.suppressed[slot_name] == true
+        or util.normalize_opacity(session.opacity[slot_name]) == 0
+end
+
+-- Hiding drops a piece to 0% opacity so it keeps its masks, materials and transform.
+-- Kept across Studio sessions; entries only restore onto the piece they were hidden on.
+INTERNAL.hidden_opacity_restore = {}
+
+function INTERNAL.set_slot_hidden(session, slot_name, hidden)
+    if not hidden then
+        if session.suppressed[slot_name] then
+            -- Codes from older builds removed the piece instead.
+            session.suppressed[slot_name] = nil
+        end
+
+        if util.normalize_opacity(session.opacity[slot_name]) == 0 then
+            local entry = session.hidden_opacity_restore[slot_name]
+            local restore = type(entry) == "table"
+                and entry.item_name == INTERNAL.slot_visual_item_name(session, slot_name)
+                and util.normalize_opacity(entry.opacity) or util.opacity_default
+            session.opacity[slot_name] = restore ~= 0 and restore ~= util.opacity_default and restore or nil
+        end
+
+        session.hidden_opacity_restore[slot_name] = nil
+
+        return true
+    elseif INTERNAL.slot_is_hidden(session, slot_name) or not INTERNAL.slot_visual_item_name(session, slot_name) then
+        return false
+    end
+
+    session.hidden_opacity_restore[slot_name] = {
+        item_name = INTERNAL.slot_visual_item_name(session, slot_name),
+        opacity = session.opacity[slot_name],
+    }
+    session.opacity[slot_name] = 0
+
+    return true
+end
+
+STUDIO_ACTIONS.hide_slot = function(session)
+    local slot_name = session.selected_slot
+
+    if not valid_look_slot(slot_name) and not EXTRA_SLOTS.is_slot(slot_name, session.extra_anchors) then
+        session.feedback = loc("feedback_select_destination")
+        return false
+    end
+
+    local hidden = INTERNAL.slot_is_hidden(session, slot_name)
+
+    if not hidden and not INTERNAL.slot_visual_item_name(session, slot_name) then
+        session.feedback = loc("feedback_hide_nothing")
+        return false
+    end
+
+    local previous = INTERNAL.history_snapshot(session)
+    INTERNAL.set_slot_hidden(session, slot_name, not hidden)
+    session.preview_item = nil
+    session.preview_material_item = nil
+    session.source_preview = nil
+    INTERNAL.record_history_change(session, previous)
+    session.feedback = hidden and loc("feedback_shown_slot") or loc("feedback_hidden_slot")
 end
 
 STUDIO_ACTIONS.empty_slot = function(session)
@@ -10484,6 +11447,7 @@ STUDIO_ACTIONS.restore_slot = function(session)
         session.materials[slot_name] = nil
         session.variants[slot_name] = nil
         session.masks[slot_name] = nil
+        session.meshes[slot_name] = nil
         session.opacity[slot_name] = nil
         session.detected_material_slots[slot_name] = nil
         session.selected_slot = "slot_gear_upperbody"
@@ -10505,6 +11469,7 @@ STUDIO_ACTIONS.restore_slot = function(session)
             and RAW_UNITS.normalize_variant_state(session.live_variants[slot_name]) or nil
         session.masks[slot_name] = session.live_masks[slot_name]
             and MASKS.clone_state(session.live_masks[slot_name]) or nil
+        session.meshes[slot_name] = MESHES.clone_state(session.live_meshes[slot_name])
         session.opacity[slot_name] = session.live_opacity[slot_name]
     end
 
@@ -10570,35 +11535,37 @@ STUDIO_ACTIONS.stage_source = function(session, action)
     session.feedback = ok and (action.replace and loc("feedback_source_replaced") or loc("feedback_source_layered")) or tostring(err)
 end
 
-STUDIO_ACTIONS.full_hide = function(session)
-    local previous = INTERNAL.history_snapshot(session)
+function INTERNAL.all_slots_hidden(session)
+    local found = false
 
-    for slot_name in pairs(LOOK_SLOTS) do
-        if valid_look_slot(slot_name) then
-            session.applied[slot_name] = nil
-            session.suppressed[slot_name] = true
-            session.empty[slot_name] = nil
-            session.materials[slot_name] = nil
-            session.variants[slot_name] = nil
-            session.masks[slot_name] = nil
+    for _, slot_name in ipairs(EXTRA_SLOTS.slot_order(session.extra_anchors)) do
+        if INTERNAL.slot_visual_item_name(session, slot_name) or session.suppressed[slot_name] then
+            found = true
+
+            if not INTERNAL.slot_is_hidden(session, slot_name) then
+                return false
+            end
         end
     end
 
-    for _, id in ipairs(EXTRA_SLOTS.ids(session.extra_anchors)) do
-        session.applied[id] = nil
-        session.suppressed[id] = true
-        session.empty[id] = nil
-        session.materials[id] = nil
-        session.variants[id] = nil
-        session.masks[id] = nil
+    return found
+end
+
+STUDIO_ACTIONS.full_hide = function(session)
+    local previous = INTERNAL.history_snapshot(session)
+    local hide = not INTERNAL.all_slots_hidden(session)
+
+    for _, slot_name in ipairs(EXTRA_SLOTS.slot_order(session.extra_anchors)) do
+        if valid_look_slot(slot_name) or EXTRA_SLOTS.is_slot(slot_name, session.extra_anchors) then
+            INTERNAL.set_slot_hidden(session, slot_name, hide)
+        end
     end
 
     session.preview_item = nil
     session.preview_material_item = nil
-    session.material_target = nil
     session.source_preview = nil
     INTERNAL.record_history_change(session, previous)
-    session.feedback = loc("feedback_full_hide")
+    session.feedback = hide and loc("feedback_full_hide") or loc("feedback_full_show")
 end
 
 STUDIO_ACTIONS.undo = function(session)
@@ -10631,6 +11598,7 @@ STUDIO_ACTIONS.revert_stage = function(session)
     session.variants = RAW_UNITS.clone_variant_map(session.live_variants)
     session.masks = MASKS.clone_map(session.live_masks)
     session.opacity = util.clone_opacity_map(session.live_opacity)
+    session.meshes = MESHES.clone_map(session.live_meshes)
     session.selected_slot = "slot_gear_upperbody"
     session.slot_page = 1
     table.clear(session.history)
@@ -10644,7 +11612,8 @@ end
 
 function INTERNAL.stage_look_code(session, code)
     local imported_applied, imported_suppressed, imported_empty, count_or_error, _,
-        imported_anchors, imported_transforms, imported_materials, imported_variants, imported_masks, imported_opacity = decode_look_code(code)
+        imported_anchors, imported_transforms, imported_materials, imported_variants, imported_masks, imported_opacity,
+        imported_meshes = decode_look_code(code)
 
     if not imported_applied then
         return false, count_or_error
@@ -10670,6 +11639,7 @@ function INTERNAL.stage_look_code(session, code)
     session.variants = RAW_UNITS.clone_variant_map(imported_variants)
     session.masks = MASKS.clone_map(imported_masks)
     session.opacity = util.clone_opacity_map(imported_opacity)
+    session.meshes = MESHES.clone_map(imported_meshes)
     session.selected_slot = "slot_gear_upperbody"
     session.slot_page = 1
     session.preview_item = nil
@@ -10721,7 +11691,8 @@ STUDIO_ACTIONS.save_player_preset = function(session, action)
         materials,
         session.variants,
         session.masks,
-        session.opacity
+        session.opacity,
+        session.meshes
     )
 
     if index then
@@ -10814,7 +11785,8 @@ STUDIO_ACTIONS.copy_code = function(session)
         materials,
         session.variants,
         session.masks,
-        session.opacity
+        session.opacity,
+        session.meshes
     )
     session.feedback = copy_to_clipboard(code) and loc("feedback_export_copied") or loc("feedback_clipboard_unavailable")
 end
@@ -10829,7 +11801,8 @@ STUDIO_ACTIONS.commit = function(session)
         session.materials,
         session.variants,
         session.masks,
-        session.opacity
+        session.opacity,
+        session.meshes
     )
 
     if not ok then
@@ -10846,6 +11819,7 @@ STUDIO_ACTIONS.commit = function(session)
     session.live_variants = RAW_UNITS.clone_variant_map(session.variants)
     session.live_masks = MASKS.clone_map(session.masks)
     session.live_opacity = util.clone_opacity_map(session.opacity)
+    session.live_meshes = MESHES.clone_map(session.meshes)
     table.clear(session.history)
     table.clear(session.redo)
     session.preview_item = nil
@@ -10878,6 +11852,8 @@ STUDIO_ACTIONS.reset_player = function(session)
     table.clear(session.live_masks)
     table.clear(session.opacity)
     table.clear(session.live_opacity)
+    table.clear(session.meshes)
+    table.clear(session.live_meshes)
     table.clear(session.detected_material_slots)
     session.material_target = nil
     session.selected_slot = "slot_gear_upperbody"
@@ -10941,6 +11917,8 @@ studio_preview_snapshot = function()
         end
 
         local effective_materials, effective_extra_transforms = EXTRA_SLOTS.effective_preview_material_state(session)
+        local effective_opacity = INTERNAL.effective_preview_opacity(session)
+        local effective_meshes = INTERNAL.effective_preview_meshes(session)
         local preview_loadout = INTERNAL.build_state_loadout(
             player,
             effective_applied,
@@ -10949,7 +11927,8 @@ studio_preview_snapshot = function()
             effective_materials,
             session.variants,
             session.masks,
-            session.opacity,
+            effective_opacity,
+            effective_meshes,
             session
         )
 
@@ -10966,11 +11945,12 @@ studio_preview_snapshot = function()
                 effective_extra_transforms,
                 preview_loadout,
                 session.variants,
-                session.opacity,
-                session.masks
+                effective_opacity,
+                effective_meshes
             ),
             preview_revision = session.preview_revision,
             selected_slot = session.selected_slot,
+            mesh_tab = session.studio_tab == "meshes",
             camera_focus = session.camera_focus,
             inspect_mode = session.inspect_mode == true,
             camera_reset_revision = session.camera_reset_revision or 0,
@@ -10987,6 +11967,7 @@ studio_preview_snapshot = function()
     else
         session.preview_cache.player = player
         session.preview_cache.selected_slot = session.selected_slot
+        session.preview_cache.mesh_tab = session.studio_tab == "meshes"
         session.preview_cache.camera_focus = session.camera_focus
         session.preview_cache.inspect_mode = session.inspect_mode == true
         session.preview_cache.camera_reset_revision = session.camera_reset_revision or 0
@@ -11061,6 +12042,7 @@ mod.npclook_view_api = {
     item_cache = item_cache,
     material_targets_from_item_maps = EXTRA_SLOTS.material_targets_from_item_maps,
     report_material_slots = EXTRA_SLOTS.report_detected_material_slots,
+    report_mesh_inventory = EXTRA_SLOTS.report_mesh_inventory,
     preview_input = function()
         local session = _studio_session
 
@@ -11083,7 +12065,7 @@ function INTERNAL.register_studio_view(view_name, module_path, class_name, view_
     local view_class = mod:io_dofile(module_path)
 
     if type(view_class) ~= "table" then
-        error(string.format("NPC Look could not load view class %s", tostring(class_name)))
+        error(string.format("Could not load view class %s", tostring(class_name)))
     end
 
     package.preload[module_path] = function()
@@ -11132,8 +12114,7 @@ function INTERNAL.ensure_studio_view_registered()
         end, util.traceback)
 
         if not preview_ok then
-            mod:error("NPC Look preview view registration failed: %s", tostring(preview_error))
-            mod:echo(loc("error_see_console", "register its preview view"))
+            mod:error("Preview view registration failed: %s", tostring(preview_error))
             return false
         end
 
@@ -11161,8 +12142,7 @@ function INTERNAL.ensure_studio_view_registered()
         end, util.traceback)
 
         if not studio_ok then
-            mod:error("NPC Look studio view registration failed: %s", tostring(studio_error))
-            mod:echo(loc("error_see_console", "register its studio view"))
+            mod:error("Studio view registration failed: %s", tostring(studio_error))
             return false
         end
 
@@ -11240,8 +12220,7 @@ function INTERNAL.open_studio()
     local begin_call_ok, begin_ok = pcall(mod.npclook_view_api.begin, player)
 
     if not begin_call_ok or not begin_ok then
-        mod:error("NPC Look session setup failed: %s", tostring(begin_ok or "session setup was refused"))
-        mod:echo(loc("error_see_console", "start the studio"))
+        mod:error("Studio session setup failed: %s", tostring(begin_ok or "session setup was refused"))
         return false
     end
 
@@ -11254,8 +12233,7 @@ function INTERNAL.open_studio()
 
     if not preview_ok then
         pcall(mod.npclook_view_api.finish, true)
-        mod:error("NPC Look preview failed to open: %s", tostring(preview_error))
-        mod:echo(loc("error_see_console", "open the preview"))
+        mod:error("Studio preview failed to open: %s", tostring(preview_error))
         return false
     end
 
@@ -11264,8 +12242,7 @@ function INTERNAL.open_studio()
     if not overlay_ok then
         INTERNAL.close_studio_views(ui_manager)
         pcall(mod.npclook_view_api.finish)
-        mod:error("NPC Look studio failed to open: %s", tostring(overlay_error))
-        mod:echo(loc("error_see_console", "open the studio"))
+        mod:error("Studio failed to open: %s", tostring(overlay_error))
         return false
     end
 
@@ -11281,460 +12258,6 @@ mod:command("npclook_ui", loc("command_open"), function()
     end
 
     INTERNAL.open_studio()
-end)
-
-mod:command("npclook_find", loc("command_find"), function(...)
-    local arguments = EXTRA_SLOTS.command_arguments(...)
-    local raw_slot_filter = #arguments > 1 and arguments[#arguments] or nil
-    local resolved_slot_filter = EXTRA_SLOTS.resolve_command_slot(raw_slot_filter, _look_state.extra_anchors)
-    local has_slot_filter = resolved_slot_filter ~= nil
-        or (type(raw_slot_filter) == "string" and string.find(string.lower(raw_slot_filter), "slot_", 1, true) == 1)
-    local filter = EXTRA_SLOTS.command_join(arguments, 1, has_slot_filter and #arguments - 1 or #arguments)
-    local slot_filter = has_slot_filter and (resolved_slot_filter or string.lower(raw_slot_filter)) or nil
-
-    if not filter then
-        mod:echo(loc("echo_usage_find"))
-        return
-    end
-
-    local matches = find_items(filter, false)
-
-    if not matches then
-        return
-    end
-
-    if slot_filter then
-        local filtered = {}
-
-        for i = 1, #matches do
-            local match = matches[i]
-            local destination_slot, source_slot = target_slot_for_item(match.item)
-            local authored_slot = match.slot
-            local exact_match = resolved_slot_filter and (destination_slot == resolved_slot_filter
-                or source_slot == resolved_slot_filter or authored_slot == resolved_slot_filter)
-            local partial_match = not resolved_slot_filter and ((destination_slot and string.find(destination_slot, slot_filter, 1, true))
-                or (source_slot and string.find(source_slot, slot_filter, 1, true))
-                or (authored_slot and string.find(authored_slot, slot_filter, 1, true)))
-
-            if exact_match or partial_match then
-                filtered[#filtered + 1] = match
-            end
-        end
-
-        matches = filtered
-    end
-
-    if #matches == 0 then
-        mod:echo(loc("echo_no_matches"))
-        return
-    end
-
-    local shown = math.min(#matches, MAX_FIND_RESULTS)
-    mod:echo(loc("echo_showing", shown, #matches, filter))
-
-    for i = 1, shown do
-        local destination_slot = target_slot_for_item(matches[i].item)
-        mod:echo(loc("echo_match_row", matches[i].name, tostring(destination_slot or matches[i].slot)))
-    end
-
-    if #matches > shown then
-        mod:echo(loc("echo_refine"))
-    end
-end)
-
-mod:command("npclook_inspect", loc("command_inspect"), function(...)
-    local input = EXTRA_SLOTS.command_join(EXTRA_SLOTS.command_arguments(...))
-
-    if not input then
-        mod:echo(loc("echo_usage_inspect"))
-        return
-    end
-
-    local item_name, item = resolve_item(input)
-
-    if not item_name then
-        return
-    end
-
-    mod:echo(loc("echo_item", item_name))
-
-    local function print_field(label, value)
-        if type(value) == "table" then
-            local parts = {}
-
-            for key, entry in pairs(value) do
-                local display = EXTRA_SLOTS.command_field_value(entry)
-                parts[#parts + 1] = type(key) == "number" and display or tostring(key) .. "=" .. display
-            end
-
-            if #parts > 0 then
-                table.sort(parts)
-                mod:echo(loc("echo_inspect_field", label, table.concat(parts, ", ")))
-            end
-        elseif value ~= nil then
-            mod:echo(loc("echo_inspect_field", label, tostring(value)))
-        end
-    end
-
-    print_field(loc("inspect_slots"), item.slots)
-    print_field(loc("inspect_hide_slots"), item.hide_slots)
-    print_field(loc("inspect_base_unit"), item.base_unit)
-    print_field(loc("inspect_attach_node"), item.attach_node)
-    print_field(loc("inspect_material_overrides"), item.material_override_items)
-    print_field(loc("inspect_children"), item.children)
-    print_field(loc("inspect_attachments"), item.attachments)
-
-    local destination_slot, source_slot = target_slot_for_item(item)
-
-    if destination_slot then
-        local source_note = source_slot and source_slot ~= destination_slot and loc("echo_auto_slot_from", source_slot) or ""
-        mod:echo(loc("echo_auto_slot", destination_slot, source_note))
-    else
-        mod:echo(loc("echo_no_auto_slot", tostring(source_slot)))
-    end
-end)
-
-function INTERNAL.wear_command(...)
-    local arguments = EXTRA_SLOTS.command_arguments(...)
-
-    if #arguments == 0 then
-        mod:echo(loc("echo_usage_wear"))
-        return
-    end
-
-    local slot_name = #arguments > 1 and EXTRA_SLOTS.resolve_command_slot(arguments[1], _look_state.extra_anchors) or nil
-    local first_argument = string.lower(tostring(arguments[1] or ""))
-    local explicit_slot = #arguments > 1 and (string.find(first_argument, "slot_", 1, true) == 1
-        or string.match(first_argument, "^extra_?%d+$") ~= nil)
-
-    if explicit_slot and not slot_name then
-        mod:echo(loc("echo_equip_failed", loc("error_invalid_slot")))
-        return
-    end
-
-    local item_input = EXTRA_SLOTS.command_join(arguments, slot_name and 2 or 1)
-
-    if not item_input then
-        mod:echo(loc("echo_usage_wear"))
-        return
-    end
-
-    local item_name, item = resolve_item(item_input)
-
-    if not item_name then
-        return
-    end
-
-    if not slot_name then
-        slot_name = target_slot_for_item(item)
-
-        if not valid_look_slot(slot_name) then
-            mod:echo(loc("echo_no_destination"))
-            return
-        end
-    end
-
-    local ok, err = mod.npclook_apply_item(slot_name, item_name)
-
-    if ok then
-        mod:echo(loc("echo_wearing", item_name, slot_name))
-    else
-        mod:echo(loc("echo_equip_failed", tostring(err or item_name)))
-    end
-end
-
-mod:command("npclook_wear", loc("command_wear"), INTERNAL.wear_command)
-mod:command("npclook_slot", loc("command_wear_alias"), INTERNAL.wear_command)
-
-mod:command("npclook_outfit", loc("command_outfit"), function(...)
-    local filter = EXTRA_SLOTS.command_join(EXTRA_SLOTS.command_arguments(...))
-
-    if not filter then
-        mod:echo(loc("echo_usage_outfit"))
-        mod:echo(loc("echo_presets", presets_string()))
-        return
-    end
-
-    local ok, count_or_error, is_preset = mod.npclook_apply_outfit(filter, false)
-
-    if ok then
-        local source_kind = is_preset and loc("echo_preset") or loc("echo_outfit")
-        mod:echo(loc("echo_outfit_applied", source_kind, count_or_error or 0))
-    else
-        mod:echo(loc("echo_outfit_failed", tostring(count_or_error or filter)))
-    end
-end)
-
-mod:command("npclook_replace", loc("command_replace"), function(...)
-    local filter = EXTRA_SLOTS.command_join(EXTRA_SLOTS.command_arguments(...))
-
-    if not filter then
-        mod:echo(loc("echo_usage_replace"))
-        mod:echo(loc("echo_presets", presets_string()))
-        return
-    end
-
-    local ok, count_or_error = mod.npclook_apply_outfit(filter, true)
-
-    if ok then
-        mod:echo(loc("echo_replaced", count_or_error or 0))
-    else
-        mod:echo(loc("echo_replace_failed", tostring(count_or_error or filter)))
-    end
-end)
-
-mod:command("npclook_presets", loc("command_presets"), function()
-    mod:echo(loc("echo_presets", presets_string()))
-end)
-
-mod:command("npclook_hide", loc("command_hide"), function(...)
-    local input = EXTRA_SLOTS.command_join(EXTRA_SLOTS.command_arguments(...))
-    local slot_name = EXTRA_SLOTS.resolve_command_slot(input, _look_state.extra_anchors)
-
-    if not slot_name then
-        mod:echo(input and loc("echo_hide_failed", loc("error_invalid_slot")) or loc("echo_usage_hide"))
-        return
-    end
-
-    local ok, err = mod.npclook_hide_slot(slot_name)
-
-    if ok then
-        mod:echo(loc("echo_hidden", slot_name))
-    else
-        mod:echo(loc("echo_hide_failed", tostring(err or slot_name)))
-    end
-end)
-
-mod:command("npclook_empty", loc("command_empty"), function(...)
-    local input = EXTRA_SLOTS.command_join(EXTRA_SLOTS.command_arguments(...))
-    local slot_name = EXTRA_SLOTS.resolve_command_slot(input, _look_state.extra_anchors)
-
-    if not slot_name then
-        mod:echo(input and loc("echo_empty_failed", loc("error_invalid_slot")) or loc("echo_usage_empty"))
-        return
-    end
-
-    local ok, err = mod.npclook_empty_slot(slot_name)
-
-    if ok then
-        mod:echo(loc("echo_empty", slot_name))
-    else
-        mod:echo(loc("echo_empty_failed", tostring(err or slot_name)))
-    end
-end)
-
-mod:command("npclook_show", loc("command_show"), function(...)
-    local input = EXTRA_SLOTS.command_join(EXTRA_SLOTS.command_arguments(...))
-    local slot_name = EXTRA_SLOTS.resolve_command_slot(input)
-
-    if not slot_name then
-        mod:echo(input and loc("echo_restore_failed", loc("error_invalid_slot")) or loc("echo_usage_show"))
-        return
-    end
-
-    local ok, err = mod.npclook_show_slot(slot_name)
-
-    if ok then
-        mod:echo(loc("echo_restored", slot_name))
-    else
-        mod:echo(loc("echo_restore_failed", tostring(err or slot_name)))
-    end
-end)
-
-mod:command("npclook_fullhide", loc("command_fullhide"), function()
-    local ok, err = mod.npclook_full_hide()
-
-    if ok then
-        mod:echo(loc("echo_character_hidden"))
-    else
-        mod:echo(loc("echo_full_hide_failed", tostring(err or loc("generic_unknown"))))
-    end
-end)
-
-mod:command("npclook_me", loc("command_export"), function()
-    local code, err = mod.npclook_export_code()
-
-    if not code then
-        mod:echo(loc("echo_export_failed", tostring(err or loc("generic_unknown_error"))))
-        return
-    end
-
-    if copy_to_clipboard(code) then
-        mod:echo(loc("echo_code_copied"))
-    else
-        mod:echo(loc("echo_code"))
-    end
-
-    mod:echo(code)
-end)
-
-function INTERNAL.import_look_command(...)
-    local code = EXTRA_SLOTS.command_join(EXTRA_SLOTS.command_arguments(...))
-
-    if not code then
-        mod:echo(loc("echo_usage_load"))
-        return
-    end
-
-    local ok, count_or_error = mod.npclook_import_code(code)
-
-    if ok then
-        mod:echo(loc("echo_code_loaded", count_or_error or 0))
-    else
-        mod:echo(loc("echo_code_failed", tostring(count_or_error or loc("generic_unknown_error"))))
-    end
-end
-
-mod:command("npclook_load", loc("command_load"), INTERNAL.import_look_command)
-mod:command("npclook_import", loc("command_load_alias"), INTERNAL.import_look_command)
-
-function INTERNAL.status_slot_labels(values)
-    local slots = table.keys(type(values) == "table" and values or {})
-    local labels = {}
-
-    table.sort(slots)
-
-    for i = 1, #slots do
-        labels[i] = EXTRA_SLOTS.label(slots[i], _look_state.extra_anchors)
-    end
-
-    return labels
-end
-
-function INTERNAL.echo_status_slot_map(label_key, values)
-    local labels = INTERNAL.status_slot_labels(values)
-
-    if #labels > 0 then
-        mod:echo(loc("echo_inspect_field", loc(label_key), table.concat(labels, ", ")))
-    end
-end
-
-mod:command("npclook_status", loc("command_status"), function()
-    if not next(_look_state.applied) and not next(_look_state.suppressed) and not next(_look_state.empty)
-        and not next(_look_state.extra_anchors) and not next(_look_state.materials)
-        and not next(_look_state.variants) and not next(_look_state.masks)
-        and not next(_look_state.opacity) then
-        mod:echo(loc("echo_no_changes"))
-        return
-    end
-
-    if next(_look_state.applied) then
-        mod:echo(loc("echo_overrides"))
-        local slots = table.keys(_look_state.applied)
-        table.sort(slots)
-
-        for i = 1, #slots do
-            local slot_name = slots[i]
-            mod:echo(loc("echo_override_row", EXTRA_SLOTS.label(slot_name, _look_state.extra_anchors), _look_state.applied[slot_name]))
-        end
-    end
-
-    if next(_look_state.suppressed) then
-        local hidden_slots = table.keys(_look_state.suppressed)
-        local labels = {}
-        table.sort(hidden_slots)
-
-        for i = 1, #hidden_slots do
-            labels[#labels + 1] = EXTRA_SLOTS.label(hidden_slots[i], _look_state.extra_anchors)
-        end
-
-        mod:echo(loc("echo_hidden_list", table.concat(labels, ", ")))
-    end
-
-    if next(_look_state.empty) then
-        local empty_slots = table.keys(_look_state.empty)
-        local labels = {}
-        table.sort(empty_slots)
-
-        for i = 1, #empty_slots do
-            labels[#labels + 1] = EXTRA_SLOTS.label(empty_slots[i], _look_state.extra_anchors)
-        end
-
-        mod:echo(loc("echo_empty_list", table.concat(labels, ", ")))
-    end
-
-    INTERNAL.echo_status_slot_map("inspect_variants", _look_state.variants)
-    INTERNAL.echo_status_slot_map("inspect_masks", _look_state.masks)
-
-    if next(_look_state.opacity) then
-        local slots = table.keys(_look_state.opacity)
-        local values = {}
-
-        table.sort(slots)
-
-        for i = 1, #slots do
-            local slot_name = slots[i]
-            local opacity = math.clamp(EXTRA_SLOTS.finite_number(_look_state.opacity[slot_name], 100), 0, 100)
-
-            values[#values + 1] = string.format(
-                "%s %d%%",
-                EXTRA_SLOTS.label(slot_name, _look_state.extra_anchors),
-                math.floor(opacity + 0.5)
-            )
-        end
-
-        mod:echo(loc("echo_inspect_field", loc("inspect_opacity"), table.concat(values, ", ")))
-    end
-
-    if next(_look_state.materials) then
-        local slots = table.keys(_look_state.materials)
-        table.sort(slots)
-
-        for i = 1, #slots do
-            local slot_name = slots[i]
-            local values = {}
-
-            for j = 1, #(_look_state.materials[slot_name] or {}) do
-                values[#values + 1] = EXTRA_SLOTS.material_display(_look_state.materials[slot_name][j])
-            end
-
-            mod:echo(loc("echo_inspect_field", loc("inspect_material_overrides"),
-                EXTRA_SLOTS.label(slot_name, _look_state.extra_anchors) .. ": " .. table.concat(values, ", ")))
-        end
-    end
-
-    for _, id in ipairs(EXTRA_SLOTS.ids(_look_state.extra_anchors)) do
-        local transform = EXTRA_SLOTS.normalize_transform(_look_state.extra_transforms[id])
-
-        if #transform.materials > 0 then
-            local values = {}
-
-            for i = 1, #transform.materials do
-                values[#values + 1] = EXTRA_SLOTS.material_display(transform.materials[i])
-            end
-
-            mod:echo(loc("echo_inspect_field", loc("inspect_material_overrides"),
-                EXTRA_SLOTS.label(id, _look_state.extra_anchors) .. ": " .. table.concat(values, ", ")))
-        end
-    end
-end)
-
-mod:command("npclook_refresh", loc("command_refresh"), function()
-    local ok, err = mod.npclook_refresh_look()
-
-    if ok then
-        mod:echo(loc("echo_refreshed"))
-    else
-        mod:echo(loc("echo_refresh_failed", tostring(err or loc("generic_unknown"))))
-    end
-end)
-
-mod:command("npclook_reset", loc("command_reset"), function()
-    if not next(_originals) and not next(_look_state.applied) and not next(_look_state.suppressed)
-        and not next(_look_state.empty) and not next(_look_state.extra_anchors)
-        and not next(_look_state.materials) and not next(_look_state.variants)
-        and not next(_look_state.masks)
-        and not next(_look_state.opacity) then
-        mod:echo(loc("echo_nothing_reset"))
-
-        return
-    end
-
-    if mod.npclook_reset_all() then
-        mod:echo(loc("echo_reset"))
-    else
-        mod:echo(loc("echo_restore_failed", loc("generic_unknown_error")))
-    end
 end)
 
 -- Lifecycle and reapply
@@ -11841,8 +12364,7 @@ function INTERNAL.reapply_failed(err)
     if util.record_attempt(_reapply_retry) then
         _reapply_pending = false
         _vanilla_restore_pending = false
-        mod:warning("NPC Look stopped reapplying after %d attempts: %s", util.RETRY_LIMIT, tostring(err or "unknown error"))
-        mod:echo(loc("echo_refresh_failed", tostring(err or loc("generic_unknown_error"))))
+        mod:warning("Stopped reapplying the look after %d attempts: %s", util.RETRY_LIMIT, tostring(err or "unknown error"))
     end
 
     return false, err
@@ -11872,7 +12394,7 @@ function INTERNAL.run_reapply(player, player_unit)
         return INTERNAL.reapply_failed(loc("error_slot_restore"))
     end
 
-    local ok, err, packages_loading = push_look(true)
+    local ok, err, packages_loading = push_look()
 
     if packages_loading then
         _reapply_pending = _live_profile_sync_waiting
@@ -11889,6 +12411,98 @@ function INTERNAL.run_reapply(player, player_unit)
     end
 
     return INTERNAL.reapply_failed(err)
+end
+
+-- Companion mod API (Pilgrimage). States are plain copies; pass them back unchanged.
+
+mod.npclook_api_version = 1
+
+mod.npclook_current_state = function()
+    return live_visual.owners.snapshot_state(live_visual.owners.local_record.state)
+end
+
+mod.npclook_decode_look = function(code)
+    if not item_cache() then
+        return nil, loc("error_master_cache_not_ready")
+    end
+
+    local applied, suppressed, empty, count_or_error, _, extra_anchors,
+        extra_transforms, materials, variants, masks, opacity, meshes = decode_look_code(code)
+
+    if not applied then
+        return nil, count_or_error
+    end
+
+    return live_visual.owners.snapshot_state({
+        applied = applied,
+        suppressed = suppressed,
+        empty = empty,
+        extra_anchors = extra_anchors,
+        extra_transforms = extra_transforms,
+        materials = materials,
+        variants = variants,
+        masks = masks,
+        opacity = opacity,
+        meshes = meshes,
+    })
+end
+
+mod.npclook_add_look_to_loadout = function(source_loadout, state)
+    if type(source_loadout) ~= "table" or not item_cache() then
+        return source_loadout
+    end
+
+    return live_visual.add_look_to_loadout(
+        source_loadout,
+        live_visual.owners.normalize_state(state or live_visual.owners.local_record.state)
+    )
+end
+
+-- Marked profiles keep their look; the local look and loadout pins skip them.
+mod.npclook_profile_with_look = function(profile, state)
+    if type(profile) ~= "table" or not item_cache() then
+        return profile
+    end
+
+    local source_profile = profile.npclook_source_profile or profile
+    local decorated = live_visual.profile_with_look(
+        source_profile,
+        live_visual.owners.normalize_state(state or live_visual.owners.local_record.state)
+    )
+
+    if decorated == source_profile then
+        decorated = shallow_copy(source_profile)
+        decorated.npclook_source_profile = source_profile
+    end
+
+    decorated.npclook_external_look = true
+
+    return decorated
+end
+
+-- Returns ok, error, packages_loading, equipped, failed. A look that is still loading
+-- counts as accepted and finishes on its own.
+mod.npclook_apply_active_look_to_bot_unit = function(player, state)
+    local ok, err, packages_loading, equipped, failed = live_visual.owners.apply(
+        player,
+        state or live_visual.owners.local_record.state
+    )
+
+    return ok or packages_loading, err, packages_loading, equipped or 0, failed or 0
+end
+
+mod.npclook_apply_active_look_to_player = function(player)
+    if player ~= nil and player == get_local_player() then
+        local ok, err, packages_loading = push_look()
+
+        return ok or packages_loading == true, err, packages_loading == true, 0, 0
+    end
+
+    return mod.npclook_apply_active_look_to_bot_unit(player, nil)
+end
+
+mod.npclook_clear_bot_look = function(player)
+    return live_visual.owners.clear(player, true)
 end
 
 mod.update = function(dt)
@@ -11942,6 +12556,7 @@ mod.update = function(dt)
     end
 
     LOADOUT_PRESETS.update(dt)
+    live_visual.owners.update(dt)
 
     local active_look = live_visual.has_active_look()
     local reapply_due = (_reapply_pending or _vanilla_restore_pending) and _game_state_ready
@@ -11965,7 +12580,10 @@ mod.update = function(dt)
         player = get_local_player()
         player_unit = player and safe_player_unit(player)
 
-        if player_unit == _bound_player_unit then
+        _package_unit_refresh_elapsed = _package_unit_refresh_elapsed + BINDING_POLL_INTERVAL
+
+        if player_unit == _bound_player_unit and _package_unit_refresh_elapsed >= PACKAGE_UNIT_REFRESH_INTERVAL then
+            _package_unit_refresh_elapsed = 0
             live_visual.refresh_active_package_units(visual_extension(player_unit))
         end
 
@@ -11978,6 +12596,13 @@ mod.update = function(dt)
 
     if reapply_due then
         INTERNAL.run_reapply(player, player_unit)
+    end
+end
+
+mod.on_setting_changed = function(setting_id)
+    if setting_id == "loadout_button_visible" or setting_id == "loadout_button_x"
+        or setting_id == "loadout_button_y" then
+        LOADOUT_PRESETS.settings_changed()
     end
 end
 
@@ -11996,6 +12621,7 @@ mod.on_game_state_changed = function(status, state_name)
     -- StateGameplay exits after the local unit is already gone.
     if status == "exit" and state_name == "StateGameplay" then
         _game_state_ready = false
+        live_visual.owners.release_all(false)
 
         if next(_look_state.applied)
             or next(_look_state.suppressed)
@@ -12004,6 +12630,7 @@ mod.on_game_state_changed = function(status, state_name)
             or next(_look_state.materials)
             or next(_look_state.variants)
             or next(_look_state.masks)
+            or next(_look_state.meshes)
             or next(_look_state.opacity) then
             _reapply_pending = true
         end
@@ -12029,6 +12656,7 @@ mod.on_game_state_changed = function(status, state_name)
         util.reset_retry(_reapply_retry)
         schedule_reapply()
     else
+        live_visual.owners.release_all(false)
         extra_slot_runtime.release_all()
         _bound_player_unit = nil
 
@@ -12039,6 +12667,7 @@ mod.on_game_state_changed = function(status, state_name)
             or next(_look_state.materials)
             or next(_look_state.variants)
             or next(_look_state.masks)
+            or next(_look_state.meshes)
             or next(_look_state.opacity) then
             _reapply_pending = true
         end
@@ -12054,7 +12683,7 @@ function INTERNAL.shut_down()
         local ok, err = pcall(fn, ...)
 
         if not ok then
-            mod:warning("NPC Look shutdown step failed (%s): %s", tostring(label), tostring(err))
+            mod:warning("Shutdown step failed (%s): %s", tostring(label), tostring(err))
         end
 
         return ok
@@ -12078,6 +12707,7 @@ function INTERNAL.shut_down()
     end
 
     shutdown_step("finish Studio session", INTERNAL.finish_studio_session)
+    shutdown_step("restore companion looks", live_visual.owners.release_all, true)
 
     local has_extra_units = false
 
@@ -12113,6 +12743,7 @@ function INTERNAL.shut_down()
     table.clear(_look_state.materials)
     table.clear(_look_state.variants)
     table.clear(_look_state.masks)
+    table.clear(_look_state.meshes)
     table.clear(_look_state.opacity)
     table.clear(_raw_unit_spawn_warnings)
     table.clear(_generated_spawn_warnings)

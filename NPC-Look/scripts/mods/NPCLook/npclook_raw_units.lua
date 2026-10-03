@@ -66,6 +66,8 @@ local state = {
     catalog_revision = -1,
     installed_cache = nil,
     installed_resources = {},
+    resolved_packages = {},
+    package_loadable = {},
     resource_loader = nil,
     resource_loader_error = nil,
     resource_loader_checked = false,
@@ -96,7 +98,7 @@ local function resource_loader(force_refresh)
         local ok, value = pcall(get_mod_function, "ResourceLoader")
 
         if not ok or type(value) ~= "table" then
-            err = "ResourceLoader is not installed or did not load before NPC Look"
+            err = "ResourceLoader is not installed or did not load first"
         elseif type(value.is_api_compatible) ~= "function"
             or not value.is_api_compatible(REQUIRED_RESOURCE_LOADER_API) then
             err = "ResourceLoader API v1 is required"
@@ -245,15 +247,52 @@ local function load_catalog()
     return true
 end
 
-local function metadata_for(resource, transient)
-    load_catalog()
+local NOT_RESOLVED = {}
 
+-- Single resources resolve through one catalog chunk; only the Units browser loads the full catalog.
+local function catalog_package(resource)
+    local value = state.package_by_resource[resource]
+
+    if value ~= nil or state.catalog_loaded then
+        return value
+    end
+
+    local resolved = state.resolved_packages[resource]
+
+    if resolved == nil then
+        local loader = resource_loader()
+        local ok, row = false, nil
+
+        if loader then
+            ok, row = pcall(loader.resolve, "unit", resource)
+        end
+
+        if ok and type(row) == "table" then
+            resolved = type(row.package_name) == "string" and row.package_name ~= ""
+                and row.package_name or false
+        else
+            resolved = NOT_RESOLVED
+        end
+
+        if loader then
+            state.resolved_packages[resource] = resolved
+        end
+    end
+
+    if resolved == NOT_RESOLVED then
+        return nil
+    end
+
+    return resolved
+end
+
+local function metadata_for(resource, transient)
     local cached = state.metadata_cache[resource]
     if cached then
         return cached
     end
 
-    local package_value = state.package_by_resource[resource]
+    local package_value = catalog_package(resource)
     local package_name = type(package_value) == "string" and package_value or nil
     local override = registry[resource]
     local in_catalog = package_value ~= nil
@@ -302,22 +341,12 @@ end
 
 local function register_resource(value, metadata)
     local resource = normalize_resource(value)
-    if not valid_resource(resource) or not load_catalog() then
+    if not valid_resource(resource) or not resource_loader() then
         return nil, false
     end
 
-    local in_catalog = state.package_by_resource[resource] ~= nil
     local existing = registry[resource]
     local changed = false
-
-    if not in_catalog and state.package_by_resource[resource] == nil then
-        local loader = resource_loader()
-        local resolved = loader and loader.resolve("unit", resource)
-
-        if type(resolved) == "table" then
-            state.package_by_resource[resource] = resolved.package_name
-        end
-    end
 
     if type(existing) ~= "table" then
         existing = {}
@@ -605,7 +634,7 @@ end
 
 function RawUnits.ensure(cache, value, metadata)
     local resource = normalize_resource(value)
-    if type(cache) ~= "table" or not valid_resource(resource) or not load_catalog() then
+    if type(cache) ~= "table" or not valid_resource(resource) or not resource_loader() then
         return nil, false
     end
 
@@ -651,11 +680,46 @@ function RawUnits.install(cache)
     return cache
 end
 
+-- Catalog rows can point at bundle-only packages (debug level worlds) the game never ships.
+function RawUnits.package_loadable(package_name)
+    if type(package_name) ~= "string" or package_name == "" then
+        return true
+    end
+
+    local cached = state.package_loadable[package_name]
+
+    if cached ~= nil then
+        return cached
+    end
+
+    local application = rawget(_G, "Application")
+    local can_get_resource = application and application.can_get_resource
+    local loadable = true
+
+    if type(can_get_resource) == "function" then
+        local ok, result = pcall(can_get_resource, "package", package_name)
+        loadable = not ok or result ~= false
+    end
+
+    state.package_loadable[package_name] = loadable
+
+    return loadable
+end
+
+function RawUnits.resource_loadable(value)
+    return RawUnits.package_loadable(RawUnits.package_name(value))
+end
+
 function RawUnits.acquire_package(package_name, callback, options)
     local loader, err = resource_loader()
     if not loader then
         return nil, err
     end
+
+    if not RawUnits.package_loadable(package_name) then
+        return nil, "package is not in this game build"
+    end
+
     return loader.acquire_package(mod, package_name, callback, options)
 end
 
@@ -941,9 +1005,16 @@ function RawUnits.apply_variants_to_slot(slot, item)
 end
 
 function RawUnits.release_transient_cache()
+    -- Worn units keep their metadata so gameplay never reloads the full catalog.
+    local retained_metadata = {}
+
+    for resource in pairs(state.definitions) do
+        retained_metadata[resource] = state.metadata_cache[resource]
+    end
+
     state.catalog_loaded = false
     state.package_by_resource = {}
-    state.metadata_cache = {}
+    state.metadata_cache = retained_metadata
     state.variant_metadata = nil
     state.catalog_entries = nil
     state.catalog_revision = -1
@@ -964,7 +1035,10 @@ function RawUnits.release_all()
 
     state.installed_cache = nil
     state.installed_resources = {}
+    state.resolved_packages = {}
+    state.package_loadable = {}
     RawUnits.release_transient_cache()
+    state.metadata_cache = {}
 end
 
 rawset(mod, "npclook_raw_units_runtime", RawUnits)

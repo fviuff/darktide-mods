@@ -32,6 +32,7 @@ local VISUAL_PANEL_MIN_H = VISUAL_ROW_H
 
 local ITEM_MODES = {
     all = true,
+    assets = true,
     materials = true,
     nodes = true,
     slot = true,
@@ -66,6 +67,19 @@ local C = {
     hidden = { 232, 78, 31, 31 },
     disabled = { 210, 23, 26, 30 },
 }
+
+local STUDIO_FONTS = {
+    machine_medium = true,
+    proxima_nova_bold = true,
+    proxima_nova_medium = true,
+    itc_novarese_medium = true,
+    itc_novarese_bold = true,
+    mono_tide_medium = true,
+    friz_quadrata = true,
+    arial = true,
+}
+local DEFAULT_FONT = "machine_medium"
+local INPUT_WIDGET_NAMES = { "search_input", "preset_name_input", "look_code_input", "opacity_input" }
 
 local function normalized_array(value)
     return type(value) == "table" and value or {}
@@ -190,6 +204,9 @@ local function normalize_snapshot(snapshot)
         snapshot.selected_details = nil
     end
     snapshot.selected_opacity = normalized_number(snapshot.selected_opacity, 100, 0, 100)
+    snapshot.selected_hidden = snapshot.selected_hidden == true
+    snapshot.clipboard_label = type(snapshot.clipboard_label) == "string" and snapshot.clipboard_label or nil
+    snapshot.all_hidden = snapshot.all_hidden == true
     snapshot.can_edit_variants = snapshot.can_edit_variants == true
     snapshot.variant_family_count = normalized_number(snapshot.variant_family_count, 0, 0)
     snapshot.variant_family_index = normalized_number(snapshot.variant_family_index, 1, 1)
@@ -271,6 +288,9 @@ local function normalize_snapshot(snapshot)
         or "preset"
     snapshot.item_mode = ITEM_MODES[snapshot.item_mode] and snapshot.item_mode or "slot"
     snapshot.can_use_units = snapshot.can_use_units == true
+    snapshot.can_use_assets = snapshot.can_use_assets == true
+    snapshot.asset_material_selected = snapshot.asset_material_selected == true
+    snapshot.asset_slot_label = type(snapshot.asset_slot_label) == "string" and snapshot.asset_slot_label or nil
     snapshot.can_use_nodes = snapshot.can_use_nodes == true
     snapshot.node_mode = snapshot.node_mode == true
     snapshot.node_skeleton_visible = snapshot.node_skeleton_visible == true
@@ -284,6 +304,28 @@ local function normalize_snapshot(snapshot)
     snapshot.material_target = tostring(snapshot.material_target or "")
     snapshot.material_target_label = tostring(snapshot.material_target_label or loc("ui_material_target_all"))
     snapshot.can_pick_materials = snapshot.can_pick_materials == true
+    snapshot.studio_tab = snapshot.studio_tab == "meshes" and "meshes" or "look"
+    local mesh_rows = {}
+
+    for _, row in ipairs(normalized_array(snapshot.mesh_rows)) do
+        if type(row) == "table" and type(row.id) == "string" then
+            mesh_rows[#mesh_rows + 1] = {
+                id = row.id,
+                label = tostring(row.label or row.id),
+                sub = tostring(row.sub or ""),
+                selected = row.selected == true,
+                hidden = row.hidden == true,
+            }
+        end
+    end
+
+    snapshot.mesh_rows = mesh_rows
+    snapshot.mesh_count = normalized_number(snapshot.mesh_count, #mesh_rows, 0)
+    snapshot.mesh_page = normalized_number(snapshot.mesh_page, 1, 1)
+    snapshot.mesh_page_count = normalized_number(snapshot.mesh_page_count, 1, 1)
+    snapshot.can_edit_meshes = snapshot.can_edit_meshes == true
+    snapshot.has_mesh_state = snapshot.has_mesh_state == true
+    snapshot.mesh_target_label = type(snapshot.mesh_target_label) == "string" and snapshot.mesh_target_label or nil
     snapshot.show_authored_slots = snapshot.show_authored_slots == true
     snapshot.can_undo = snapshot.can_undo == true
     snapshot.can_redo = snapshot.can_redo == true
@@ -953,6 +995,7 @@ NPCLookStudioView.init = function(self, settings, context)
     self._transform_input_slot = nil
     self._focused_transform_field = nil
     self._opacity_input_slot = nil
+    self:_read_text_settings()
 
     for i = 1, #TRANSFORM_FIELDS do
         local widget = self._widgets_by_name and self._widgets_by_name["transform_" .. TRANSFORM_FIELDS[i].field .. "_input"]
@@ -973,6 +1016,39 @@ NPCLookStudioView.init = function(self, settings, context)
     if preset_name_input then
         preset_name_input.visible = false
     end
+end
+
+NPCLookStudioView._read_text_settings = function(self)
+    local font = mod:get("studio_font")
+    local scale = tonumber(mod:get("studio_text_scale")) or 100
+
+    self._font_type = STUDIO_FONTS[font] and font or DEFAULT_FONT
+    self._text_scale = math.clamp(scale, 70, 150) / 100
+
+    local input_names = table.clone(INPUT_WIDGET_NAMES)
+
+    for i = 1, #TRANSFORM_FIELDS do
+        input_names[#input_names + 1] = "transform_" .. TRANSFORM_FIELDS[i].field .. "_input"
+    end
+
+    for i = 1, #input_names do
+        local widget = self._widgets_by_name and self._widgets_by_name[input_names[i]]
+        local style = widget and widget.style
+
+        for _, style_id in ipairs({ "display_text", "active_placeholder" }) do
+            local text_style = type(style) == "table" and style[style_id]
+
+            if type(text_style) == "table" then
+                text_style.npclook_base_font_size = text_style.npclook_base_font_size or text_style.font_size or 12
+                text_style.font_size = self:_font_size(text_style.npclook_base_font_size)
+                text_style.font_type = self._font_type
+            end
+        end
+    end
+end
+
+NPCLookStudioView._font_size = function(self, size)
+    return math.max(6, math.floor((size or 16) * (self._text_scale or 1) + 0.5))
 end
 
 NPCLookStudioView._api = function(self)
@@ -1382,7 +1458,8 @@ NPCLookStudioView._text = function(self, text, x, y, width, height, size, color,
     content._color = color or C.text
     style.offset[1], style.offset[2] = x, y
     style.size[1], style.size[2] = width, height
-    style.font_size = size or 16
+    style.font_size = self:_font_size(size or 16)
+    style.font_type = self._font_type or DEFAULT_FONT
     style.text_horizontal_alignment = alignment or "left"
 
     return true
@@ -1421,11 +1498,13 @@ NPCLookStudioView._button = function(self, label, sub, x, y, width, height, acti
     title.offset[1], title.offset[2] = x + text_inset, y + (height <= 34 and 0 or 2)
     title.size[1], title.size[2] = math.max(width - text_inset * 2, 0), height <= 34 and height or math.min(26, height * 0.48)
     title.text_horizontal_alignment = state.align or "left"
-    title.font_size = state.font_size or 15
+    title.font_size = self:_font_size(state.font_size or 15)
+    title.font_type = self._font_type or DEFAULT_FONT
     sub_style.offset[1], sub_style.offset[2] = x + text_inset, y + math.max(18, height * 0.45)
     sub_style.size[1], sub_style.size[2] = math.max(width - text_inset * 2, 0), math.max(0, height * 0.48)
     sub_style.text_horizontal_alignment = state.align or "left"
-    sub_style.font_size = state.sub_size or 12
+    sub_style.font_size = self:_font_size(state.sub_size or 12)
+    sub_style.font_type = self._font_type or DEFAULT_FONT
 
     if height <= 34 then
         content.sub = ""
@@ -1817,7 +1896,7 @@ NPCLookStudioView._rebuild_inspect = function(self, snapshot)
         { align = "center", font_size = 11 }
     )
     self:_button(
-        loc("ui_hide_slot"),
+        snapshot.selected_hidden and loc("ui_show_slot") or loc("ui_hide_slot"),
         "",
         W * 0.5 + 216,
         FOOTER_Y + 25,
@@ -1938,106 +2017,96 @@ NPCLookStudioView._rebuild_safe = function(self)
     util.record_attempt(self._rebuild_retry)
     self:_reset_pools()
 
-    local overlay_ok = self:_set_rebuild_error(message)
+    self:_set_rebuild_error(message)
 
     util.report_once(self, "_last_rebuild_error", message, function(new_message)
         mod:error("Studio rebuild failed: %s", new_message)
-
-        if not overlay_ok then
-            mod:echo(loc("error_see_console", "rebuild the studio"))
-        end
     end)
 
     return false
 end
 
-NPCLookStudioView._rebuild = function(self)
-    self:_reset_pools()
+NPCLookStudioView._rebuild_mesh_column = function(self, snapshot)
+    self:_text(loc("ui_meshes_title"), LEFT_X + 16, TOP_Y + 14, LEFT_W - 32, 28, 20, C.gold)
+    self:_text(loc("ui_results", snapshot.mesh_count), LEFT_X + 200, TOP_Y + 14, 194, 28, 11, C.dim, "right")
+    self:_button(
+        loc("ui_reset_meshes"),
+        "",
+        LEFT_X + 16,
+        TOP_Y + 50,
+        150,
+        32,
+        { kind = "reset_meshes" },
+        {
+            align = "center",
+            font_size = 10,
+            title_color = C.red,
+            disabled = not snapshot.has_mesh_state,
+        }
+    )
+    self:_button(
+        loc("ui_previous_page"),
+        "",
+        LEFT_X + 318,
+        TOP_Y + 50,
+        24,
+        32,
+        { kind = "mesh_page", delta = -1 },
+        { align = "center", compact = true }
+    )
+    self:_text(loc("ui_page", snapshot.mesh_page, snapshot.mesh_page_count), LEFT_X + 344, TOP_Y + 50, 30, 32, 11, C.dim, "center")
+    self:_button(
+        loc("ui_next_page"),
+        "",
+        LEFT_X + 378,
+        TOP_Y + 50,
+        20,
+        32,
+        { kind = "mesh_page", delta = 1 },
+        { align = "center", compact = true }
+    )
 
-    local snapshot = self._snapshot
+    local mesh_y = TOP_Y + 92
 
-    if not snapshot then
-        self:_apply_frame_mode(false)
-        self:_sync_transform_inputs({}, false)
-        self:_sync_opacity_input(nil, false)
-
-        local preset_name_input = self:_widget("preset_name_input")
-
-        if preset_name_input then
-            preset_name_input.visible = false
-        end
-
-        self:_text(loc("ui_studio_title"), PAD + 18, HEADER_CONTENT_Y, 520, 34, 26, C.gold)
-        self:_text(loc("error_bridge_not_ready"), PAD + 18, 92, 600, 34, 17, C.red)
-        return
+    if not snapshot.can_edit_meshes then
+        self:_text(loc("ui_mesh_no_piece"), LEFT_X + 16, mesh_y + 20, LEFT_W - 32, 34, 14, C.dim, "center")
+    elseif #snapshot.mesh_rows == 0 then
+        self:_text(loc("ui_mesh_scanning"), LEFT_X + 16, mesh_y + 20, LEFT_W - 32, 34, 14, C.dim, "center")
     end
 
-    self:_apply_frame_mode(snapshot.inspect_mode)
-    self:_sync_transform_inputs(snapshot, not snapshot.inspect_mode)
-    self:_sync_opacity_input(snapshot, not snapshot.inspect_mode)
+    for i = 1, #snapshot.mesh_rows do
+        local row = snapshot.mesh_rows[i]
 
-    local frame = self:_widget("frame")
-    local frame_style = frame and frame.style
-    local show_mask_controls = not snapshot.inspect_mode
-        and snapshot.visual_options_mode == "masks"
-        and snapshot.can_edit_masks
-    local show_variant_controls = not snapshot.inspect_mode
-        and not show_mask_controls
-        and snapshot.can_edit_variants
-    local visual_row_count = show_mask_controls and #snapshot.mask_rows
-        or show_variant_controls and (snapshot.can_switch_variant_controls and 3 or 2)
-        or 0
-    local visual_panel_height = visual_row_count > 0
-        and visual_row_count * VISUAL_ROW_H + (visual_row_count - 1) * VISUAL_ROW_GAP
-        or VISUAL_PANEL_MIN_H
-    local visual_panel_y = VISUAL_PANEL_BOTTOM - visual_panel_height
-
-    if type(frame_style) == "table" then
-        local panel_style = frame_style.visual_panel
-
-        if type(panel_style) == "table" then
-            panel_style.visible = visual_row_count > 0
-            panel_style.offset[1] = VISUAL_PANEL_X
-            panel_style.offset[2] = visual_panel_y
-            panel_style.size[1] = VISUAL_PANEL_W
-            panel_style.size[2] = visual_panel_height
-        end
+        self:_button(row.label, row.sub, LEFT_X + 14, mesh_y, LEFT_W - 96, 50,
+            { kind = "select_mesh", mesh = row.id },
+            {
+                selected = row.selected,
+                hidden = row.hidden,
+                title_color = row.hidden and C.red or row.selected and C.gold or C.text,
+            })
+        self:_button(
+            row.hidden and loc("ui_show") or loc("ui_hide"),
+            "",
+            LEFT_X + LEFT_W - 78,
+            mesh_y + 8,
+            64,
+            34,
+            { kind = "toggle_mesh_hidden", mesh = row.id },
+            {
+                align = "center",
+                font_size = 10,
+                title_color = row.hidden and C.red or C.text,
+            }
+        )
+        mesh_y = mesh_y + 55
     end
 
-    if snapshot.inspect_mode then
-        self:_rebuild_inspect(snapshot)
-        return
-    end
+    self:_rule(LEFT_X + 16, TOP_Y + 712, LEFT_W - 32)
+    self:_text(snapshot.mesh_target_label or loc("ui_mesh_whole_piece"), LEFT_X + 16, TOP_Y + 720, LEFT_W - 32, 25, 17, C.gold)
+    self:_text(loc("ui_mesh_help"), LEFT_X + 16, TOP_Y + 750, LEFT_W - 32, 90, 12, C.dim)
+end
 
-    local preset_name_input = self:_widget("preset_name_input")
-
-    if preset_name_input then
-        preset_name_input.visible = snapshot.source_kind == "player"
-    end
-
-    local search_input = self:_widget("search_input")
-
-    if search_input then
-        search_input.visible = true
-
-        local search_content = search_input.content
-
-        if type(search_content) == "table" then
-            search_content.placeholder_text = snapshot.node_mode
-                and loc("ui_search_nodes_placeholder")
-                or loc("ui_search_placeholder")
-        end
-    end
-
-    self:_text(loc("ui_studio_title"), PAD + 18, HEADER_CONTENT_Y, 520, 36, 27, C.gold)
-
-    local dirty_text = snapshot.dirty_count > 0 and loc("ui_staged_changes", snapshot.dirty_count) or loc("ui_stage_matches")
-    local dirty_color = snapshot.dirty_count > 0 and C.gold or C.green
-
-    self:_text(dirty_text, RIGHT_X + 16, HEADER_CONTENT_Y, RIGHT_W - 112, 36, 21, dirty_color, "right")
-    self:_button(loc("ui_close"), "", W - 96, HEADER_Y + 7, 52, 34, { kind = "_close" }, { align = "center", font_size = 18 })
-
-    -- Outfit column
+NPCLookStudioView._rebuild_source_column = function(self, snapshot)
     self:_text(loc("ui_outfit_sources"), LEFT_X + 16, TOP_Y + 14, LEFT_W - 32, 28, 20, C.gold)
     self:_button(
         loc("ui_presets"),
@@ -2218,6 +2287,128 @@ NPCLookStudioView._rebuild = function(self)
             }
         )
     end
+end
+
+NPCLookStudioView._rebuild = function(self)
+    self:_reset_pools()
+
+    local snapshot = self._snapshot
+
+    if not snapshot then
+        self:_apply_frame_mode(false)
+        self:_sync_transform_inputs({}, false)
+        self:_sync_opacity_input(nil, false)
+
+        local preset_name_input = self:_widget("preset_name_input")
+
+        if preset_name_input then
+            preset_name_input.visible = false
+        end
+
+        self:_text(loc("ui_studio_title"), PAD + 18, HEADER_CONTENT_Y, 520, 34, 26, C.gold)
+        self:_text(loc("error_bridge_not_ready"), PAD + 18, 92, 600, 34, 17, C.red)
+        return
+    end
+
+    self:_apply_frame_mode(snapshot.inspect_mode)
+    self:_sync_transform_inputs(snapshot, not snapshot.inspect_mode)
+    self:_sync_opacity_input(snapshot, not snapshot.inspect_mode)
+
+    local frame = self:_widget("frame")
+    local frame_style = frame and frame.style
+    local show_asset_slot = not snapshot.inspect_mode and snapshot.asset_slot_label ~= nil
+    local show_mask_controls = not snapshot.inspect_mode
+        and not show_asset_slot
+        and snapshot.visual_options_mode == "masks"
+        and snapshot.can_edit_masks
+    local show_variant_controls = not snapshot.inspect_mode
+        and not show_asset_slot
+        and not show_mask_controls
+        and snapshot.can_edit_variants
+    local visual_row_count = show_asset_slot and 1
+        or show_mask_controls and #snapshot.mask_rows
+        or show_variant_controls and (snapshot.can_switch_variant_controls and 3 or 2)
+        or 0
+    local visual_panel_height = visual_row_count > 0
+        and visual_row_count * VISUAL_ROW_H + (visual_row_count - 1) * VISUAL_ROW_GAP
+        or VISUAL_PANEL_MIN_H
+    local visual_panel_y = VISUAL_PANEL_BOTTOM - visual_panel_height
+
+    if type(frame_style) == "table" then
+        local panel_style = frame_style.visual_panel
+
+        if type(panel_style) == "table" then
+            panel_style.visible = visual_row_count > 0
+            panel_style.offset[1] = VISUAL_PANEL_X
+            panel_style.offset[2] = visual_panel_y
+            panel_style.size[1] = VISUAL_PANEL_W
+            panel_style.size[2] = visual_panel_height
+        end
+    end
+
+    if snapshot.inspect_mode then
+        self:_rebuild_inspect(snapshot)
+        return
+    end
+
+    local preset_name_input = self:_widget("preset_name_input")
+
+    if preset_name_input then
+        preset_name_input.visible = snapshot.studio_tab == "look" and snapshot.source_kind == "player"
+    end
+
+    local search_input = self:_widget("search_input")
+
+    if search_input then
+        search_input.visible = true
+
+        local search_content = search_input.content
+
+        if type(search_content) == "table" then
+            search_content.placeholder_text = snapshot.node_mode
+                and loc("ui_search_nodes_placeholder")
+                or loc("ui_search_placeholder")
+        end
+    end
+
+    self:_text(loc("ui_studio_title"), PAD + 18, HEADER_CONTENT_Y, 196, 36, 27, C.gold)
+
+    local studio_tabs = {
+        { tab = "look", label = loc("ui_tab_look") },
+        { tab = "meshes", label = loc("ui_tab_meshes") },
+    }
+
+    for i = 1, #studio_tabs do
+        local entry = studio_tabs[i]
+
+        self:_button(
+            entry.label,
+            "",
+            LEFT_X + 218 + (i - 1) * 98,
+            HEADER_Y + 11,
+            92,
+            34,
+            { kind = "studio_tab", tab = entry.tab },
+            {
+                selected = snapshot.studio_tab == entry.tab,
+                align = "center",
+                font_size = 12,
+            }
+        )
+    end
+
+    local dirty_text = snapshot.dirty_count > 0 and loc("ui_staged_changes", snapshot.dirty_count) or loc("ui_stage_matches")
+    local dirty_color = snapshot.dirty_count > 0 and C.gold or C.green
+
+    self:_text(dirty_text, RIGHT_X + 16, HEADER_CONTENT_Y, RIGHT_W - 112, 36, 21, dirty_color, "right")
+    self:_button(loc("ui_close"), "", W - 96, HEADER_Y + 7, 52, 34, { kind = "_close" }, { align = "center", font_size = 18 })
+
+    -- Outfit column
+    if snapshot.studio_tab == "meshes" then
+        self:_rebuild_mesh_column(snapshot)
+    else
+        self:_rebuild_source_column(snapshot)
+    end
 
     -- Library column
     self:_text(loc("ui_piece_library"), RIGHT_X + 16, TOP_Y + 14, RIGHT_W - 32, 28, 20, C.gold)
@@ -2225,96 +2416,54 @@ NPCLookStudioView._rebuild = function(self)
     local library_status = loc("ui_results", snapshot.item_result_count)
 
     self:_text(library_status, RIGHT_X + 200, TOP_Y + 14, 198, 28, 11, C.dim, "right")
-    self:_button(
-        loc("ui_mode_slot"),
-        "",
-        RIGHT_X + 16,
-        TOP_Y + 50,
-        52,
-        32,
-        { kind = "item_mode", mode = "slot" },
-        {
-            selected = snapshot.item_mode == "slot",
-            align = "center",
-            font_size = 9,
-        }
-    )
-    self:_button(
-        loc("ui_mode_all"),
-        "",
-        RIGHT_X + 72,
-        TOP_Y + 50,
-        42,
-        32,
-        { kind = "item_mode", mode = "all" },
-        {
-            selected = snapshot.item_mode == "all",
-            align = "center",
-            font_size = 9,
-        }
-    )
-    self:_button(
-        loc("ui_mode_units"),
-        "",
-        RIGHT_X + 118,
-        TOP_Y + 50,
-        58,
-        32,
-        { kind = "item_mode", mode = "units" },
-        {
-            selected = snapshot.item_mode == "units",
-            align = "center",
-            font_size = 8,
-            disabled = not snapshot.can_use_units,
-        }
-    )
-    self:_button(
-        loc("ui_mode_materials"),
-        "",
-        RIGHT_X + 180,
-        TOP_Y + 50,
-        70,
-        32,
-        { kind = "item_mode", mode = "materials" },
-        {
-            selected = snapshot.item_mode == "materials",
-            align = "center",
-            font_size = 8,
-            disabled = not snapshot.can_pick_materials,
-        }
-    )
-    self:_button(
-        loc("ui_mode_nodes"),
-        "",
-        RIGHT_X + 254,
-        TOP_Y + 50,
-        48,
-        32,
-        { kind = "item_mode", mode = "nodes" },
-        {
-            selected = snapshot.item_mode == "nodes",
-            align = "center",
-            font_size = 8,
-            disabled = not snapshot.can_use_nodes,
-        }
-    )
+    local library_modes = {
+        { mode = "slot", label = loc("ui_mode_slot"), width = 46, font_size = 9 },
+        { mode = "all", label = loc("ui_mode_all"), width = 38, font_size = 9 },
+        { mode = "units", label = loc("ui_mode_units"), width = 50, font_size = 8, disabled = not snapshot.can_use_units },
+        { mode = "assets", label = loc("ui_mode_assets"), width = 54, font_size = 8, disabled = not snapshot.can_use_assets },
+        { mode = "materials", label = loc("ui_mode_materials"), width = 52, font_size = 7, disabled = not snapshot.can_pick_materials },
+        { mode = "nodes", label = loc("ui_mode_nodes"), width = 46, font_size = 8, disabled = not snapshot.can_use_nodes },
+    }
+    local mode_x = RIGHT_X + 16
+
+    for i = 1, #library_modes do
+        local entry = library_modes[i]
+
+        self:_button(
+            entry.label,
+            "",
+            mode_x,
+            TOP_Y + 50,
+            entry.width,
+            32,
+            { kind = "item_mode", mode = entry.mode },
+            {
+                selected = snapshot.item_mode == entry.mode,
+                align = "center",
+                font_size = entry.font_size,
+                disabled = entry.disabled == true,
+            }
+        )
+        mode_x = mode_x + entry.width + 4
+    end
+
     self:_button(
         loc("ui_previous_page"),
         "",
-        RIGHT_X + 308,
+        RIGHT_X + 322,
         TOP_Y + 50,
-        26,
+        22,
         32,
         { kind = "item_page", delta = -1 },
         { align = "center", compact = true }
     )
-    self:_text(loc("ui_page", snapshot.item_page, snapshot.item_page_count), RIGHT_X + 336, TOP_Y + 50, 34, 32, 11, C.dim, "center")
+    self:_text(loc("ui_page", snapshot.item_page, snapshot.item_page_count), RIGHT_X + 346, TOP_Y + 50, 28, 32, 10, C.dim, "center")
     self:_button(
         loc("ui_next_page"),
         "",
-        RIGHT_X + 372,
+        RIGHT_X + 376,
         TOP_Y + 50,
-        26,
+        22,
         32,
         { kind = "item_page", delta = 1 },
         { align = "center", compact = true }
@@ -2343,8 +2492,16 @@ NPCLookStudioView._rebuild = function(self)
         item_y = item_y + 61
     end
 
-    if snapshot.material_mode then
+    local material_controls = snapshot.material_mode or snapshot.asset_material_selected
+
+    if material_controls then
         self:_text(loc("ui_material_target"), RIGHT_X + 16, TOP_Y + 624, 52, 24, 10, C.dim)
+    end
+
+    -- A selected mesh replaces the slot material target.
+    if material_controls and snapshot.mesh_target_label then
+        self:_text(snapshot.mesh_target_label, RIGHT_X + 72, TOP_Y + 624, 320, 24, 10, C.gold, "center")
+    elseif material_controls then
         self:_button(
             loc("ui_previous_page"),
             "",
@@ -2374,6 +2531,9 @@ NPCLookStudioView._rebuild = function(self)
                 disabled = #(snapshot.material_targets or {}) <= 1,
             }
         )
+    end
+
+    if material_controls then
         self:_button(
             loc("ui_toggle_material"),
             "",
@@ -2472,7 +2632,7 @@ NPCLookStudioView._rebuild = function(self)
             { align = "center", font_size = 11 }
         )
         self:_button(
-            loc("ui_hide"),
+            snapshot.selected_hidden and loc("ui_show") or loc("ui_hide"),
             "",
             RIGHT_X + 202,
             TOP_Y + 652,
@@ -2505,14 +2665,44 @@ NPCLookStudioView._rebuild = function(self)
             { kind = "clone_slot" },
             { align = "center", font_size = 9 }
         )
+        self:_button(
+            loc("ui_copy_slot"),
+            "",
+            RIGHT_X + 290,
+            TOP_Y + 736,
+            102,
+            30,
+            { kind = "copy_slot" },
+            { align = "center", font_size = 9 }
+        )
+        self:_button(
+            loc("ui_paste_extra"),
+            "",
+            RIGHT_X + 290,
+            TOP_Y + 770,
+            102,
+            30,
+            { kind = "paste_slot_extra" },
+            { align = "center", font_size = 9, disabled = snapshot.clipboard_label == nil }
+        )
+        self:_button(
+            loc("ui_paste_into"),
+            "",
+            RIGHT_X + 290,
+            TOP_Y + 804,
+            102,
+            30,
+            { kind = "paste_slot_into" },
+            { align = "center", font_size = 9, disabled = snapshot.clipboard_label == nil }
+        )
     end
     self:_rule(RIGHT_X + 16, TOP_Y + 700, RIGHT_W - 150)
-    local selected_heading = snapshot.material_mode
+    local selected_heading = material_controls
         and loc("ui_selected_materials")
         or snapshot.node_mode and loc("ui_selected_node")
         or loc("ui_selected_piece")
     local selected_materials = snapshot.selected_materials or {}
-    local details = snapshot.material_mode
+    local details = material_controls
         and (#selected_materials > 0
             and table.concat(selected_materials, "\n")
             or loc("ui_no_material_overrides"))
@@ -2522,7 +2712,20 @@ NPCLookStudioView._rebuild = function(self)
     self:_text(selected_heading, RIGHT_X + 16, TOP_Y + 710, RIGHT_W - 150, 22, 15, C.gold)
     self:_text(details, RIGHT_X + 16, TOP_Y + 735, RIGHT_W - 150, 165, 11, C.dim)
 
-    if show_mask_controls then
+    if show_asset_slot then
+        self:_selector_row(
+            snapshot.asset_slot_label,
+            visual_panel_y,
+            { kind = "cycle_asset_slot", delta = -1 },
+            { kind = "cycle_asset_slot", delta = 1 },
+            {
+                title_color = C.gold,
+                toggle_action = { kind = "type_asset_slot" },
+                toggle_label = "+",
+                toggle_enabled = snapshot.item_search ~= "",
+            }
+        )
+    elseif show_mask_controls then
         local row_y = visual_panel_y
 
         for i = 1, #snapshot.mask_rows do
@@ -2882,7 +3085,7 @@ NPCLookStudioView._rebuild = function(self)
         { align = "center", font_size = 12 }
     )
     self:_button(
-        loc("ui_full_hide"),
+        snapshot.all_hidden and loc("ui_full_show") or loc("ui_full_hide"),
         "",
         PAD + 326,
         by,
@@ -3021,6 +3224,7 @@ end
 
 NPCLookStudioView.on_enter = function(self)
     NPCLookStudioView.super.on_enter(self)
+    self:_read_text_settings()
     self:_clear_rebuild_error()
 
     local ok, err = xpcall(function()

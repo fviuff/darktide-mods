@@ -509,11 +509,16 @@ function PresetStore.new(dependencies)
     end
 
     function store.initialize()
-        local ready, ready_error = store.ensure_file()
+        -- The directory and file only need validating once; later opens just reread presets.
+        if not store.file_ready then
+            local ready, ready_error = store.ensure_file()
 
-        if not ready then
-            mod:error("Could not create player preset file: %s", tostring(ready_error))
-            return false
+            if not ready then
+                mod:error("Could not create player preset file: %s", tostring(ready_error))
+                return false
+            end
+
+            store.file_ready = true
         end
 
         local read_ok, read_error = store.read()

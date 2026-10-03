@@ -15,8 +15,11 @@ local ROW_HEIGHT = 40
 local ROW_SPACING = 4
 local FOOTER_HEIGHT = 34
 local ROWS_PER_PAGE = 8
-local BASE_X = 1560
-local BASE_Y = 172
+local MIN_ROWS_PER_PAGE = 3
+local SCREEN_BOTTOM = 1040
+local DEFAULT_X = 1560
+-- Darktide 1.13 places the player stats panel under the profile presets.
+local DEFAULT_Y = 560
 local BASE_Z = 220
 
 local function normalized_string(value)
@@ -86,6 +89,31 @@ function LoadoutPresets.new(dependencies)
 
     local function local_player()
         return dependencies.get_local_player and dependencies.get_local_player() or nil
+    end
+
+    local function button_visible()
+        return not dependencies.button_visible or dependencies.button_visible() ~= false
+    end
+
+    local function button_position()
+        local x, y
+
+        if dependencies.button_position then
+            x, y = dependencies.button_position()
+        end
+
+        x = math.clamp(tonumber(x) or DEFAULT_X, 0, 1920 - LIST_WIDTH)
+        y = math.clamp(tonumber(y) or DEFAULT_Y, 0, SCREEN_BOTTOM - HEADER_HEIGHT)
+
+        return math.floor(x + 0.5), math.floor(y + 0.5)
+    end
+
+    -- Shorten the list instead of running it off screen.
+    local function rows_per_page(base_y)
+        local available = SCREEN_BOTTOM - (base_y + HEADER_HEIGHT + ROW_SPACING + FOOTER_HEIGHT)
+        local rows = math.floor(available / (ROW_HEIGHT + ROW_SPACING))
+
+        return math.clamp(rows, MIN_ROWS_PER_PAGE, ROWS_PER_PAGE)
     end
 
     local function load_pins()
@@ -323,13 +351,13 @@ function LoadoutPresets.new(dependencies)
             return clear_foreign_look(character_id)
         end
 
-        local ok, reset_ok, err = pcall(dependencies.reset_look)
+        local ok, reset_ok, err, changed = pcall(dependencies.reset_look)
 
         if not ok then
             return false, reset_ok
         end
 
-        return reset_ok == true, err
+        return reset_ok == true, err, changed ~= false
     end
 
 
@@ -390,9 +418,10 @@ function LoadoutPresets.new(dependencies)
         local ok
         local err
         local applied_preset = false
+        local changed = true
 
         if pin_value == DEFAULT_PIN then
-            ok, err = reset_current_look(character_id)
+            ok, err, changed = reset_current_look(character_id)
         elseif pin_value then
             local preset = preset_by_name(pin_value)
 
@@ -417,9 +446,10 @@ function LoadoutPresets.new(dependencies)
             end
         elseif pending.reconcile then
             if dependencies.has_active_look and dependencies.has_active_look() == true then
-                ok, err = reset_current_look(character_id)
+                ok, err, changed = reset_current_look(character_id)
             else
                 ok = true
+                changed = false
             end
         else
             service.pending = nil
@@ -435,8 +465,13 @@ function LoadoutPresets.new(dependencies)
             else
                 clear_managed_look()
             end
-            request_inventory_refresh(character_id)
-            rebuild_inventory_views()
+
+            -- A reconcile that left the vanilla look untouched must not respawn inventory characters.
+            if changed ~= false then
+                request_inventory_refresh(character_id)
+                rebuild_inventory_views()
+            end
+
             return
         end
 
@@ -582,6 +617,10 @@ function LoadoutPresets.new(dependencies)
         end
 
         service.presets_changed()
+    end
+
+    function service.settings_changed()
+        rebuild_inventory_views()
     end
 
     function service.presets_changed()
@@ -969,6 +1008,9 @@ function LoadoutPresets.new(dependencies)
             open = false,
             page = 1,
             page_count = 1,
+            base_x = DEFAULT_X,
+            base_y = DEFAULT_Y,
+            rows_per_page = ROWS_PER_PAGE,
             rebuild = true,
             preset_revision = -1,
             header = create_view_widget(
@@ -1060,9 +1102,11 @@ function LoadoutPresets.new(dependencies)
 
     local function set_open(state, open)
         state.open = open == true
+        state.header.visible = true
 
         for i = 1, #state.rows do
-            state.rows[i].visible = state.open and state.rows[i].content._entry ~= nil
+            state.rows[i].visible = state.open and i <= state.rows_per_page
+                and state.rows[i].content._entry ~= nil
         end
 
         state.previous.visible = state.open
@@ -1070,31 +1114,50 @@ function LoadoutPresets.new(dependencies)
         state.page_label.visible = state.open
     end
 
-    local function position_inventory_widgets(state)
-        state.header.offset = { BASE_X, BASE_Y, BASE_Z }
+    local function hide_inventory_state(state)
+        state.open = false
+        state.header.visible = false
+        state.previous.visible = false
+        state.next.visible = false
+        state.page_label.visible = false
 
-        local row_y = BASE_Y + HEADER_HEIGHT + ROW_SPACING
+        for i = 1, #state.rows do
+            state.rows[i].visible = false
+        end
+    end
+
+    local function position_inventory_widgets(state)
+        local base_x, base_y = state.base_x, state.base_y
+
+        state.header.offset = { base_x, base_y, BASE_Z }
+
+        local row_y = base_y + HEADER_HEIGHT + ROW_SPACING
 
         for i = 1, ROWS_PER_PAGE do
             state.rows[i].offset = {
-                BASE_X,
+                base_x,
                 row_y + (i - 1) * (ROW_HEIGHT + ROW_SPACING),
                 BASE_Z + 2,
             }
         end
 
-        local footer_y = row_y + ROWS_PER_PAGE * (ROW_HEIGHT + ROW_SPACING)
+        local footer_y = row_y + state.rows_per_page * (ROW_HEIGHT + ROW_SPACING)
 
-        state.previous.offset = { BASE_X, footer_y, BASE_Z + 2 }
-        state.page_label.offset = { BASE_X + 48, footer_y, BASE_Z + 2 }
-        state.next.offset = { BASE_X + LIST_WIDTH - 44, footer_y, BASE_Z + 2 }
+        state.previous.offset = { base_x, footer_y, BASE_Z + 2 }
+        state.page_label.offset = { base_x + 48, footer_y, BASE_Z + 2 }
+        state.next.offset = { base_x + LIST_WIDTH - 44, footer_y, BASE_Z + 2 }
     end
 
     local function rebuild_inventory_state(state)
         local character_id, loadout_id, selected = service.active()
         local available = character_id ~= nil and loadout_id ~= nil
         local values = entries()
-        local page_count = math.max(math.ceil(#values / ROWS_PER_PAGE), 1)
+
+        state.base_x, state.base_y = button_position()
+        state.rows_per_page = rows_per_page(state.base_y)
+
+        local rows_shown = state.rows_per_page
+        local page_count = math.max(math.ceil(#values / rows_shown), 1)
 
         state.page = math.max(math.min(state.page, page_count), 1)
         state.page_count = page_count
@@ -1105,11 +1168,11 @@ function LoadoutPresets.new(dependencies)
         ))
         state.header.content.hotspot.disabled = not available
 
-        local first = (state.page - 1) * ROWS_PER_PAGE + 1
+        local first = (state.page - 1) * rows_shown + 1
 
         for i = 1, ROWS_PER_PAGE do
             local row = state.rows[i]
-            local entry = values[first + i - 1]
+            local entry = i <= rows_shown and values[first + i - 1] or nil
 
             row.content._entry = entry
             row.content.hotspot.is_selected = entry ~= nil and entry.value == selected
@@ -1173,6 +1236,17 @@ function LoadoutPresets.new(dependencies)
 
     local function update_inventory_view(view, input_service)
         if view._is_own_player == false or view._is_readonly == true then
+            return
+        end
+
+        if not button_visible() then
+            local hidden_state = service.inventory_states[view]
+
+            if hidden_state then
+                hide_inventory_state(hidden_state)
+                hidden_state.rebuild = true
+            end
+
             return
         end
 

@@ -1,6 +1,7 @@
 local mod = get_mod("NPCLook")
 local util = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_util")
 local extra_slot_runtime = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_extra_slots")
+local MESHES = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_meshes")
 local UIWorkspaceSettings = require("scripts/settings/ui/ui_workspace_settings")
 local UIWorldSpawner = require("scripts/managers/ui/ui_world_spawner")
 local UIProfileSpawner = require("scripts/managers/ui/ui_profile_spawner")
@@ -271,7 +272,8 @@ local function report_preview_package_error(key, message)
     end
 end
 
-local function ensure_preview_packages(profile_spawner, profile)
+-- Only the given slots are scanned when a list is passed, so one click loads one piece.
+local function ensure_preview_packages(profile_spawner, profile, slot_names)
     local package_manager = Managers.package
 
     if not profile_spawner or not package_manager or type(profile) ~= "table" then
@@ -284,7 +286,17 @@ local function ensure_preview_packages(profile_spawner, profile)
     local mission_template = profile_spawner._mission_template
     local package_ids = preview_package_cache.package_ids
 
-    for _, item in pairs(profile.loadout or {}) do
+    local items = profile.loadout or {}
+
+    if slot_names then
+        items = {}
+
+        for i = 1, #slot_names do
+            items[slot_names[i]] = profile.loadout and profile.loadout[slot_names[i]]
+        end
+    end
+
+    for _, item in pairs(items) do
         if type(item) == "table" and not table.is_empty(item) then
             table.clear(preview_dependency_scratch)
 
@@ -719,7 +731,24 @@ NPCLookStudioPreviewView._reconcile_base_loadout = function(self)
         return false
     end
 
-    if not ensure_preview_packages(spawner, desired_profile) then
+    local ignored_slots = spawner._ignored_slots or {}
+    local changed_slots = {}
+
+    for slot_name, settings in pairs(ItemSlotSettings) do
+        if type(settings) == "table" and not ignored_slots[slot_name]
+            and not settings.ignore_character_spawning
+            and desired_loadout[slot_name] ~= active_loadout[slot_name] then
+            changed_slots[#changed_slots + 1] = slot_name
+        end
+    end
+
+    if #changed_slots == 0 then
+        self._base_reconcile_pending = false
+        self._base_reconcile_error = nil
+        return true
+    end
+
+    if not ensure_preview_packages(spawner, desired_profile, changed_slots) then
         self._base_reconcile_pending = false
         return false
     end
@@ -728,7 +757,6 @@ NPCLookStudioPreviewView._reconcile_base_loadout = function(self)
     local previous_present = {}
     local previous_loading_items = {}
     local previous_loading_present = {}
-    local ignored_slots = spawner._ignored_slots or {}
     local changed = false
 
     for slot_name, settings in pairs(ItemSlotSettings) do
@@ -773,11 +801,27 @@ NPCLookStudioPreviewView._reconcile_base_loadout = function(self)
                 and previous_loading_items[slot_name] or nil
         end
 
+        local changed_items = {}
+
+        for i = 1, #changed_slots do
+            local item = desired_loadout[changed_slots[i]]
+
+            changed_items[i] = string.format(
+                "%s=%s",
+                changed_slots[i],
+                tostring(type(item) == "table" and item.name or item)
+            )
+        end
+
         local message = tostring(err)
 
         if self._base_reconcile_error ~= message then
             self._base_reconcile_error = message
-            mod:warning("Studio base-slot preview reconciliation failed: %s", message)
+            mod:warning(
+                "Studio base-slot preview reconciliation failed (%s): %s",
+                table.concat(changed_items, ", "),
+                message
+            )
         end
 
         self._base_reconcile_pending = false
@@ -1030,6 +1074,74 @@ NPCLookStudioPreviewView._report_material_slots = function(self)
     self._material_slot_scan_key = key
 end
 
+-- Mesh rows are only scanned while the Meshes tab is open.
+NPCLookStudioPreviewView._report_mesh_inventory = function(self)
+    local api = self:_api()
+    local slot_name = self._selected_slot
+    local spawner = self._profile_spawner
+
+    if not self._mesh_tab or not api or type(api.report_mesh_inventory) ~= "function" or not slot_name then
+        self._mesh_scan_key = nil
+        return
+    end
+
+    local state_ok, loading, spawned = profile_spawner_state(spawner)
+
+    if not state_ok or loading or not spawned
+        or self._base_reconcile_pending or single_item_loader_busy(spawner) then
+        return
+    end
+
+    local spawn_data = spawner._character_spawn_data
+    local slot = spawn_data and spawn_data.slots and spawn_data.slots[slot_name]
+    local loadout_item = self._presentation_profile
+        and self._presentation_profile.loadout
+        and self._presentation_profile.loadout[slot_name]
+    local item_name = type(loadout_item) == "table" and loadout_item.name
+        or type(loadout_item) == "string" and loadout_item or nil
+    local scoped_units
+
+    if slot then
+        scoped_units = MESHES.slot_scoped_units(slot, item_name or slot.item and slot.item.name)
+    end
+
+    -- Extra slots and raw-unit overlays live in the preview's extra-slot context.
+    if (not scoped_units or #scoped_units == 0) and type(extra_slot_runtime.context_mesh_units) == "function" then
+        scoped_units = extra_slot_runtime.context_mesh_units(self, slot_name)
+            or extra_slot_runtime.context_mesh_units(self, "raw_slot:" .. tostring(slot_name))
+    end
+
+    scoped_units = scoped_units or {}
+
+    local key = table.concat({
+        tostring(slot_name),
+        tostring(item_name or ""),
+        tostring(self._preview_revision),
+        tostring(self._preview_extra_slots_signature),
+        tostring(#scoped_units),
+    }, "|")
+
+    if self._mesh_scan_key == key then
+        return
+    end
+
+    local ok, inventory = pcall(MESHES.inventory, scoped_units)
+    local report_ok, report_error = false, inventory
+
+    if ok then
+        report_ok, report_error = pcall(api.report_mesh_inventory, slot_name, inventory)
+    end
+
+    util.report_once(self, "_mesh_report_error", not report_ok and tostring(report_error) or nil, function(message)
+        mod:error("Studio mesh reporting failed: %s", message)
+    end)
+
+    -- Empty scans retry until the slot's units are spawned.
+    if report_ok and #scoped_units > 0 then
+        self._mesh_scan_key = key
+    end
+end
+
 NPCLookStudioPreviewView._sync_preview = function(self, force)
     local snapshot = self:_preview_snapshot()
 
@@ -1054,6 +1166,11 @@ NPCLookStudioPreviewView._sync_preview = function(self, force)
     self._node_skeleton_visible = snapshot.node_skeleton_visible == true
     self._preview_attach_node = type(snapshot.preview_attach_node) == "string"
         and snapshot.preview_attach_node or nil
+
+    if self._mesh_tab ~= (snapshot.mesh_tab == true) then
+        self._mesh_tab = snapshot.mesh_tab == true
+        self._mesh_scan_key = nil
+    end
 
     if force or extra_slots_signature ~= self._preview_extra_slots_signature then
         self._preview_extra_slots = preview_extra_slots
@@ -1626,6 +1743,7 @@ NPCLookStudioPreviewView.update = function(self, dt, t, input_service)
             self:_reconcile_base_loadout()
             self:_sync_preview_extra_slots()
             self:_report_material_slots()
+            self:_report_mesh_inventory()
             self:_update_node_skeleton()
         end
     end

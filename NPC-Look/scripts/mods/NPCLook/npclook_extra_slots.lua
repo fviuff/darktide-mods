@@ -9,6 +9,7 @@ end
 
 local util = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_util")
 local RAW_UNITS = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_raw_units")
+local MESHES = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_meshes")
 local loc = util.localize
 local normalize_opacity = util.normalize_opacity
 local apply_opacity_to_units = util.apply_opacity_to_units
@@ -581,6 +582,33 @@ local function set_visual_hierarchy_visibility(root_unit, attachment_map, visibl
     apply(root_unit)
 end
 
+local function record_mesh_units(record)
+    return MESHES.scoped_units(
+        {
+            record.root_unit,
+            record.first_person_root_unit,
+            record.animated_first_person_root_unit,
+        },
+        {
+            record.attachment_map,
+            record.first_person_attachment_map,
+            record.animated_first_person_attachment_map,
+        },
+        {
+            record.item_name_by_unit,
+            record.first_person_item_name_by_unit,
+            record.animated_first_person_item_name_by_unit,
+        },
+        record.item_name
+    )
+end
+
+local function apply_record_meshes(record)
+    if record and record.mesh_state then
+        MESHES.apply(record_mesh_units(record), record.mesh_state, item_cache())
+    end
+end
+
 local function set_record_perspective_visibility(record, first_person_mode, force)
     if not record then
         return
@@ -613,6 +641,10 @@ local function set_record_perspective_visibility(record, first_person_mode, forc
                 and record.first_person_enabled == true
                 and (record.first_person_animate ~= true or record.raw_unit == true)
         )
+
+        if record.mesh_state then
+            MESHES.apply_visibility(record_mesh_units(record), record.mesh_state)
+        end
     end
 end
 
@@ -740,7 +772,12 @@ local function sanitize_raw_item_tree(item, definitions, memo, depth)
     return item
 end
 
-local function make_extra_slot_item(item_name, breed_name, value, dependency_materials, anchor_attach_node, variant_state, opacity)
+-- Mesh state rides on the variant signature so mesh edits respawn the extra like variant edits.
+local function entry_variant_signature(variant_state, mesh_state)
+    return RAW_UNITS.variant_signature(variant_state) .. "\29" .. MESHES.signature(mesh_state)
+end
+
+local function make_extra_slot_item(item_name, breed_name, value, dependency_materials, anchor_attach_node, variant_state, opacity, mesh_state)
     local cache = item_cache()
     local master_item = type(mod.npclook_item_definition) == "function"
         and mod.npclook_item_definition(item_name)
@@ -771,8 +808,10 @@ local function make_extra_slot_item(item_name, breed_name, value, dependency_mat
     end
 
     item.npclook_raw_variant_state = RAW_UNITS.normalize_variant_state(variant_state, item_name)
-    item.npclook_raw_variant_signature = RAW_UNITS.variant_signature(item.npclook_raw_variant_state)
+    item.npclook_mesh_state = MESHES.normalize_state(mesh_state, item_name)
+    item.npclook_raw_variant_signature = entry_variant_signature(item.npclook_raw_variant_state, item.npclook_mesh_state)
     item.npclook_opacity = normalize_opacity(opacity)
+    MESHES.add_package_dependencies(item, item.npclook_mesh_state, cache)
 
     -- Keep parent material overrides local to this item.
     item.material_override_apply_to_parent = false
@@ -1455,7 +1494,7 @@ local function parent_list_contains(parents, slot_name)
     return false
 end
 
-local function plan_extra_slots(loadout, applied, suppressed, empty, anchors, transforms, breed_name, variants, opacity)
+local function plan_extra_slots(loadout, applied, suppressed, empty, anchors, transforms, breed_name, variants, opacity, meshes)
     local definitions = item_cache() or {}
     local raw_entries = desired_extra_slots(applied, suppressed, empty, anchors, transforms)
 
@@ -1526,7 +1565,11 @@ local function plan_extra_slots(loadout, applied, suppressed, empty, anchors, tr
             type(variants) == "table" and variants[entry.variant_key or entry.id],
             entry.item_name
         )
-        entry.variant_signature = RAW_UNITS.variant_signature(entry.variant_state)
+        entry.mesh_state = MESHES.normalize_state(
+            type(meshes) == "table" and meshes[entry.variant_key or entry.id],
+            entry.item_name
+        )
+        entry.variant_signature = entry_variant_signature(entry.variant_state, entry.mesh_state)
         entry.opacity = normalize_opacity(type(opacity) == "table" and opacity[entry.variant_key or entry.id])
 
         if is_parent_material_item(entry.anchor, item) then
@@ -3834,7 +3877,8 @@ local function spawn_extra_slot(context, entry)
         entry.dependency_materials,
         entry.attach_node,
         entry.variant_state,
-        entry.opacity
+        entry.opacity,
+        entry.mesh_state
     )
 
     if not item then
@@ -4273,6 +4317,7 @@ local function spawn_extra_slot(context, entry)
         material_signature = item.npclook_material_signature,
         variant_signature = entry.variant_signature,
         opacity = entry.opacity,
+        mesh_state = item.npclook_mesh_state,
         variant_item = item,
         variant_state = RAW_UNITS.normalize_variant_state(entry.variant_state, entry.item_name),
         transform_enabled = applied_transform.enabled,
@@ -4352,6 +4397,7 @@ local function spawn_extra_slot(context, entry)
 
     stabilize_transformed_visibility(record)
     apply_opacity_to_units(collect_record_units(record), record.opacity)
+    apply_record_meshes(record)
 
     set_record_perspective_visibility(record, context.first_person_mode, true)
 
@@ -4378,7 +4424,11 @@ local function normalize_entries(entries)
                 transform_signature = transform_signature(transform, true),
                 dependency_materials = dependency_materials,
                 variant_state = RAW_UNITS.normalize_variant_state(entry.variant_state, entry.item_name),
-                variant_signature = RAW_UNITS.variant_signature(entry.variant_state),
+                mesh_state = MESHES.normalize_state(entry.mesh_state, entry.item_name),
+                variant_signature = entry_variant_signature(
+                    RAW_UNITS.normalize_variant_state(entry.variant_state, entry.item_name),
+                    MESHES.normalize_state(entry.mesh_state, entry.item_name)
+                ),
                 opacity = normalize_opacity(entry.opacity),
                 material_signature = table.concat(dependency_materials, "\30")
                     .. "\29" .. table.concat(transform.materials, "\31"),
@@ -4640,7 +4690,24 @@ local function live_settings(player_unit, ext)
     }
 end
 
-function ExtraSlotRuntime.sync(player_unit, ext, applied, suppressed, empty, anchors, transforms, loadout, variants, opacity)
+-- Companion owners (Pilgrimage bots) sync into a third-person context of their own.
+function ExtraSlotRuntime.sync(player_unit, ext, applied, suppressed, empty, anchors, transforms, loadout, variants, opacity, meshes, owner)
+    if owner ~= nil then
+        local settings = live_settings(player_unit, ext)
+        settings.first_person_unit = nil
+        settings.first_person_extension = nil
+        settings.context_label = "companion"
+
+        local context = context_for(owner, false)
+        configure_context(context, player_unit, settings)
+
+        return sync_context(
+            context,
+            plan_extra_slots(loadout, applied, suppressed, empty, anchors, transforms, context.breed_name, variants, opacity, meshes),
+            true
+        )
+    end
+
     local context = context_for(LIVE_CONTEXT, true)
     configure_context(context, player_unit, live_settings(player_unit, ext))
     context.variants = variants or context.variants
@@ -4648,7 +4715,7 @@ function ExtraSlotRuntime.sync(player_unit, ext, applied, suppressed, empty, anc
 
     local ok, spawned_count, failed_count, first_error, packages_loading = sync_context(
         context,
-        plan_extra_slots(loadout, applied, suppressed, empty, anchors, transforms, context.breed_name, context.variants, opacity),
+        plan_extra_slots(loadout, applied, suppressed, empty, anchors, transforms, context.breed_name, context.variants, opacity, meshes),
         true
     )
 
@@ -4674,7 +4741,7 @@ local function match_error(id, reason)
     return loc("error_visual_apply", string.format("%s: %s", tostring(id), tostring(reason)))
 end
 
-function ExtraSlotRuntime.matches(applied, suppressed, empty, anchors, transforms, loadout, variants, opacity)
+function ExtraSlotRuntime.matches(applied, suppressed, empty, anchors, transforms, loadout, variants, opacity, meshes)
     local context = contexts[LIVE_CONTEXT]
     local entries = normalize_entries(plan_extra_slots(
         loadout,
@@ -4685,7 +4752,8 @@ function ExtraSlotRuntime.matches(applied, suppressed, empty, anchors, transform
         transforms,
         context and context.breed_name,
         variants or context and context.variants,
-        opacity
+        opacity,
+        meshes
     ))
 
     if context then
@@ -4781,10 +4849,10 @@ function ExtraSlotRuntime.matches(applied, suppressed, empty, anchors, transform
     return true
 end
 
-function ExtraSlotRuntime.preview_items(applied, suppressed, empty, anchors, transforms, breed_name, loadout, variants, opacity)
+function ExtraSlotRuntime.preview_items(applied, suppressed, empty, anchors, transforms, breed_name, loadout, variants, opacity, meshes)
     local extra_slot_items = {}
 
-    for _, entry in ipairs(plan_extra_slots(loadout, applied, suppressed, empty, anchors, transforms, breed_name, variants, opacity)) do
+    for _, entry in ipairs(plan_extra_slots(loadout, applied, suppressed, empty, anchors, transforms, breed_name, variants, opacity, meshes)) do
         local item = make_extra_slot_item(
             entry.item_name,
             breed_name,
@@ -4792,7 +4860,8 @@ function ExtraSlotRuntime.preview_items(applied, suppressed, empty, anchors, tra
             entry.dependency_materials,
             entry.attach_node,
             entry.variant_state,
-            entry.opacity
+            entry.opacity,
+            entry.mesh_state
         )
 
         if item then
@@ -4807,6 +4876,7 @@ function ExtraSlotRuntime.preview_items(applied, suppressed, empty, anchors, tra
                 variant_state = RAW_UNITS.normalize_variant_state(entry.variant_state, entry.item_name),
                 variant_signature = entry.variant_signature,
                 opacity = entry.opacity,
+                mesh_state = entry.mesh_state,
             }
         end
     end
@@ -4823,6 +4893,10 @@ function ExtraSlotRuntime.sync_context(owner, parent_unit, settings, entries)
     configure_context(context, parent_unit, settings or {})
 
     return sync_context(context, entries)
+end
+
+function ExtraSlotRuntime.has_context(owner)
+    return owner ~= nil and contexts[owner] ~= nil
 end
 
 function ExtraSlotRuntime.clear_context(owner, delay)
@@ -5100,6 +5174,17 @@ function ExtraSlotRuntime.context_material_target_data(owner, id)
     }
 end
 
+function ExtraSlotRuntime.context_mesh_units(owner, id)
+    local context = contexts[owner]
+    local record = context and context.records and context.records[id]
+
+    if not record or record.failed then
+        return nil
+    end
+
+    return record_mesh_units(record)
+end
+
 function ExtraSlotRuntime.has_units()
     local context = contexts[LIVE_CONTEXT]
 
@@ -5285,6 +5370,7 @@ local function apply_first_person_visual_to_record(context, record, visual)
     record.physics_tracker = neutralize_record_physics(record)
     stabilize_transformed_visibility(record)
     apply_opacity_to_units(collect_record_units(record), record.opacity)
+    apply_record_meshes(record)
     set_record_perspective_visibility(record, context.first_person_mode, true)
     refresh_context_activity(context)
 end
@@ -5320,6 +5406,7 @@ local function apply_animated_first_person_visual_to_record(context, record, vis
     )
     stabilize_transformed_visibility(record)
     apply_opacity_to_units(collect_record_units(record), record.opacity)
+    apply_record_meshes(record)
     set_record_perspective_visibility(record, context.first_person_mode, true)
     refresh_context_activity(context)
 end

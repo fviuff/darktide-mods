@@ -11,6 +11,7 @@ local MATERIAL_OVERRIDE_FIELDS = {
     "vector4_material_overrides",
     "texture_material_overrides",
     "textures_material_overrides_by_items",
+    "material_overrides",
 }
 local reported_errors = {}
 
@@ -30,7 +31,15 @@ function MaterialSchema.install(namespace, dependencies)
     local safe_unit_alive = dependencies.safe_unit_alive or function(unit)
         return unit ~= nil
     end
+    local ensure_item = dependencies.ensure_item or function()
+        return nil
+    end
     namespace.material_target_all = ""
+
+    -- Custom asset overrides are created on demand next to master items.
+    function namespace.material_override_item(cache, item_name)
+        return rawget(cache, item_name) or ensure_item(cache, item_name)
+    end
 
     function namespace.is_material_override_item(item)
         if type(item) ~= "table" then
@@ -53,7 +62,7 @@ function MaterialSchema.install(namespace, dependencies)
         local seen = {}
         local global = false
 
-        for _, field in ipairs({ "texture_material_overrides", "textures_material_overrides_by_items" }) do
+        for _, field in ipairs({ "texture_material_overrides", "textures_material_overrides_by_items", "material_overrides" }) do
             for _, value in pairs(item[field] or {}) do
                 local slot = type(value) == "table" and value.material_slot
 
@@ -204,7 +213,7 @@ function MaterialSchema.install(namespace, dependencies)
 
         for i = 1, math.min(#source, MATERIAL_OVERRIDE_LIMIT) do
             local item_name, target = namespace.material_entry_parts(source[i])
-            local item = item_name and rawget(cache, item_name)
+            local item = item_name and namespace.material_override_item(cache, item_name)
             local entry = item and namespace.material_entry(item_name, target)
 
             if entry and namespace.is_material_override_item(item) and not seen[entry] then
@@ -606,7 +615,7 @@ function MaterialSchema.install(namespace, dependencies)
 
         reported_errors[key] = true
         mod:error(
-            "NPC Look material override failed (%s, %s): %s",
+            "Material override failed (%s, %s): %s",
             tostring(context or "unknown context"),
             namespace.material_display(entry),
             tostring(error_message or "no compatible material property was applied")
