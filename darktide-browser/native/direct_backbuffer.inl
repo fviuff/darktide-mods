@@ -1,12 +1,4 @@
-// current darktide build
-
-static constexpr u32 DR_EXPECTED_TIMESTAMP = 0x6a7b1286u;
-static constexpr u32 DR_EXPECTED_SIZE_OF_IMAGE = 0x0280c000u;
-static constexpr usize DR_RENDER_DEVICE_GLOBAL_RVA = 0x012d1400ull;
-static constexpr usize DR_PRESENT_EXECUTE_RVA = 0x00766937ull;
-static constexpr usize DR_PRESENT_CALL_SETUP_RVA = 0x00766a15ull;
-static constexpr usize DR_PRESENT_VCALL_RVA = 0x00766a29ull;
-static constexpr usize DR_AFTER_MATH_SET_GLOBAL_RVA = 0x0075d653ull;
+// current darktide renderer layout
 static constexpr usize DR_RENDER_DEVICE_D3D12_DEVICE = 0x1e8u;
 static constexpr usize DR_RENDER_DEVICE_DIRECT_QUEUE = 0x218u;
 static constexpr usize DR_RENDER_DEVICE_RESOURCE_CONTEXT = 0x308u;
@@ -101,6 +93,8 @@ static u8 *g_dr_patch_word_address = nullptr;
 static u64 g_dr_patch_original_word = 0u;
 static u64 g_dr_patch_installed_word = 0u;
 static void **g_dr_hook_pointer_page = nullptr;
+static u8 **g_dr_render_device_global = nullptr;
+static u8 *g_dr_present_callsite = nullptr;
 
 static void dr_set_error(const char *text) {
     if (!try_lock_u32(&g_dr_error_lock)) {
@@ -132,71 +126,215 @@ static bool dr_bytes_equal(const u8 *p, const u8 *bytes, usize count) {
     return true;
 }
 
-static bool dr_validate_exact_build() {
+static bool dr_section_range(u32 image_size, const u8 *section, u32 *rva, u32 *size, u32 *characteristics) {
+    const u32 address = *reinterpret_cast<const u32 *>(section + 12u);
+    const u32 virtual_size = *reinterpret_cast<const u32 *>(section + 8u);
+    const u32 raw_size = *reinterpret_cast<const u32 *>(section + 16u);
+    const u32 extent = virtual_size > raw_size ? virtual_size : raw_size;
+
+    if (!extent || address > image_size || extent > image_size - address) {
+        return false;
+    }
+
+    *rva = address;
+    *size = extent;
+    *characteristics = *reinterpret_cast<const u32 *>(section + 36u);
+    return true;
+}
+
+static bool dr_readable_protection(DWORD protect) {
+    if (protect & PAGE_GUARD) {
+        return false;
+    }
+
+    const DWORD access = protect & 0xffu;
+    return access == 0x02u || access == 0x04u || access == 0x08u ||
+           access == PAGE_EXECUTE_READ || access == PAGE_EXECUTE_READWRITE ||
+           access == PAGE_EXECUTE_WRITECOPY;
+}
+
+static bool dr_scan_pattern(const u8 *base, u32 rva, u32 size, const u8 *pattern, const u8 *mask, usize pattern_size, u32 *match, u32 *count) {
+    if (pattern_size > size || !pVirtualQuery) {
+        return false;
+    }
+
+    const usize start = reinterpret_cast<usize>(base + rva);
+    const usize finish = start + size;
+    usize cursor = start;
+
+    while (cursor < finish) {
+        MEMORY_BASIC_INFORMATION_ info{};
+
+        if (pVirtualQuery(reinterpret_cast<void *>(cursor), &info, sizeof(info)) != sizeof(info)) {
+            return false;
+        }
+
+        const usize region_start = reinterpret_cast<usize>(info.BaseAddress);
+        const usize region_end = region_start + info.RegionSize;
+        if (info.State != MEM_COMMIT || !dr_readable_protection(info.Protect) || region_end <= cursor) {
+            return false;
+        }
+
+        cursor = region_end < finish ? region_end : finish;
+    }
+
+    const u8 *bytes = base + rva;
+    for (usize i = 0; i <= size - pattern_size; ++i) {
+        bool equal = true;
+        for (usize j = 0; j < pattern_size; ++j) {
+            if (mask[j] && bytes[i + j] != pattern[j]) {
+                equal = false;
+                break;
+            }
+        }
+        if (equal) {
+            ++*count;
+            *match = rva + static_cast<u32>(i);
+        }
+    }
+
+    return true;
+}
+
+static bool dr_discover_renderer() {
     if (atomic_load_u32(&g_dr_build_checked)) {
         return atomic_load_u32(&g_dr_build_ok) != 0u;
     }
 
     u8 *base = exe_base();
-
-    if (!base || !readable_range(base, 0x1000u) || *reinterpret_cast<u16 *>(base) != 0x5a4du) {
+    if (!base || !readable_range(base, 0x40u) || *reinterpret_cast<u16 *>(base) != 0x5a4du) {
         dr_set_error("Darktide executable header is not readable");
-        atomic_store_u32(&g_dr_build_checked, 1u);
-        return false;
+        goto failed;
     }
 
-    const u32 pe_offset = *reinterpret_cast<u32 *>(base + 0x3cu);
+    {
+        const u32 pe_offset = *reinterpret_cast<u32 *>(base + 0x3cu);
+        if (pe_offset < 0x40u || pe_offset > 0x100000u || !readable_range(base + pe_offset, 24u) ||
+            *reinterpret_cast<u32 *>(base + pe_offset) != 0x4550u) {
+            dr_set_error("Darktide PE header is invalid");
+            goto failed;
+        }
 
-    if (pe_offset > 0x1000u ||
-        !readable_range(base + pe_offset, 0x100u) ||
-        *reinterpret_cast<u32 *>(base + pe_offset) != 0x4550u) {
-        dr_set_error("Darktide PE header is invalid");
-        atomic_store_u32(&g_dr_build_checked, 1u);
-        return false;
-    }
+        const u8 *file = base + pe_offset + 4u;
+        const u16 machine = *reinterpret_cast<const u16 *>(file);
+        const u16 section_count = *reinterpret_cast<const u16 *>(file + 2u);
+        const u16 optional_size = *reinterpret_cast<const u16 *>(file + 16u);
+        const u8 *optional = file + 20u;
+        if (machine != 0x8664u || !section_count || section_count > 96u || optional_size < 64u ||
+            !readable_range(optional, optional_size) || *reinterpret_cast<const u16 *>(optional) != 0x20bu) {
+            dr_set_error("Darktide executable is not a valid AMD64 PE32+");
+            goto failed;
+        }
 
-    const u32 timestamp = *reinterpret_cast<u32 *>(base + pe_offset + 8u);
-    u8 *optional = base + pe_offset + 24u;
+        const u32 image_size = *reinterpret_cast<const u32 *>(optional + 56u);
+        const u32 section_offset = pe_offset + 24u + optional_size;
+        const u32 section_bytes = static_cast<u32>(section_count) * 40u;
+        if (image_size < section_offset || section_offset > image_size || section_bytes > image_size - section_offset ||
+            !readable_range(base + section_offset, section_bytes)) {
+            dr_set_error("Darktide PE section table is invalid");
+            goto failed;
+        }
 
-    if (*reinterpret_cast<u16 *>(optional) != 0x20bu) {
-        dr_set_error("Darktide executable is not PE32+");
-        atomic_store_u32(&g_dr_build_checked, 1u);
-        return false;
-    }
+        u32 text_rva = 0u, text_size = 0u, text_characteristics = 0u;
+        const u8 *sections = base + section_offset;
+        u32 text_count = 0u;
+        for (u32 i = 0; i < section_count; ++i) {
+            const u8 *section = sections + i * 40u;
+            u32 section_rva = 0u, section_size = 0u, characteristics = 0u;
+            if (!dr_section_range(image_size, section, &section_rva, &section_size, &characteristics)) {
+                dr_set_error("Darktide PE section range is invalid or unreadable");
+                goto failed;
+            }
+            if (section[0] == '.' && section[1] == 't' && section[2] == 'e' && section[3] == 'x' && section[4] == 't') {
+                ++text_count;
+                text_rva = section_rva;
+                text_size = section_size;
+                text_characteristics = characteristics;
+            }
+        }
 
-    const u32 image_size = *reinterpret_cast<u32 *>(optional + 56u);
+        if (text_count != 1u || !(text_characteristics & 0x40000000u) || !(text_characteristics & 0x20000000u)) {
+            dr_set_error("Darktide .text section is missing or invalid");
+            goto failed;
+        }
 
-    if (timestamp != DR_EXPECTED_TIMESTAMP || image_size != DR_EXPECTED_SIZE_OF_IMAGE) {
-        dr_set_error("unsupported Darktide executable build");
-        atomic_store_u32(&g_dr_build_checked, 1u);
-        return false;
-    }
+        static const u8 global_pattern[] = {0x48, 0x89, 0x0d, 0, 0, 0, 0, 0x48, 0x8b, 0xd9};
+        static const u8 global_mask[] = {1, 1, 1, 0, 0, 0, 0, 1, 1, 1};
+        static const u8 execute_site[] = {
+            0x48, 0x8b, 0x8e, 0x18, 0x02, 0x00, 0x00, 0x4d, 0x8d, 0x47, 0x10,
+            0xba, 0x01, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x01, 0xff, 0x50, 0x50,
+        };
+        static const u8 present_setup[] = {
+            0x49, 0x8b, 0x4c, 0x24, 0x08, 0x8b, 0xd7, 0x40, 0x38, 0xbe, 0xc5, 0x02,
+            0x00, 0x00, 0x44, 0x8b, 0xc3, 0x0f, 0x95, 0xc2, 0x48, 0x8b, 0x01, 0xff,
+            0x50, 0x40,
+        };
+        static const u8 exact_mask[sizeof(present_setup)] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+        u32 global_match = 0u, global_matches = 0u, setup_match = 0u, setup_matches = 0u;
+        if (!dr_scan_pattern(base, text_rva, text_size, global_pattern, global_mask, sizeof(global_pattern), &global_match, &global_matches) ||
+            !dr_scan_pattern(base, text_rva, text_size, present_setup, exact_mask, sizeof(present_setup), &setup_match, &setup_matches) ||
+            global_matches != 1u || setup_matches != 1u || setup_match < text_rva ||
+            setup_match - text_rva < 0xdeu || setup_match - text_rva > text_size ||
+            text_size - (setup_match - text_rva) < 0x1bu) {
+            dr_set_error("Darktide renderer signatures are missing or ambiguous");
+            goto failed;
+        }
 
-    // validate the three present landmarks before patching
-    static const u8 after_global[] = {
-        0x48, 0x89, 0x0d, 0xa6, 0x3d, 0xb7, 0x00, 0x48, 0x8b, 0xd9,
-    };
-    static const u8 execute_site[] = {
-        0x48, 0x8b, 0x8e, 0x18, 0x02, 0x00, 0x00, 0x4d, 0x8d, 0x47, 0x10,
-        0xba, 0x01, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x01, 0xff, 0x50, 0x50,
-    };
-    static const u8 present_setup[] = {
-        0x49, 0x8b, 0x4c, 0x24, 0x08, 0x8b, 0xd7, 0x40, 0x38, 0xbe, 0xc5, 0x02,
-        0x00, 0x00, 0x44, 0x8b, 0xc3, 0x0f, 0x95, 0xc2, 0x48, 0x8b, 0x01, 0xff,
-        0x50, 0x40,
-    };
+        if (!dr_bytes_equal(base + setup_match - 0xdeu, execute_site, sizeof(execute_site))) {
+            dr_set_error("Darktide Present execute sequence failed validation");
+            goto failed;
+        }
 
-    if (!dr_bytes_equal(base + DR_AFTER_MATH_SET_GLOBAL_RVA, after_global, sizeof(after_global)) ||
-        !dr_bytes_equal(base + DR_PRESENT_EXECUTE_RVA, execute_site, sizeof(execute_site)) ||
-        !dr_bytes_equal(base + DR_PRESENT_CALL_SETUP_RVA, present_setup, sizeof(present_setup))) {
-        dr_set_error("Darktide renderer machine-code guard failed");
-        atomic_store_u32(&g_dr_build_checked, 1u);
-        return false;
+        const i32 displacement = *reinterpret_cast<const i32 *>(base + global_match + 3u);
+        const i64 global_address = static_cast<i64>(reinterpret_cast<usize>(base + global_match + 7u)) + displacement;
+        if (global_address < static_cast<i64>(reinterpret_cast<usize>(base)) ||
+            global_address >= static_cast<i64>(reinterpret_cast<usize>(base)) + image_size) {
+            dr_set_error("render-device global target is outside the executable image");
+            goto failed;
+        }
+        const u32 target_rva = static_cast<u32>(global_address - reinterpret_cast<usize>(base));
+        bool writable_data = false;
+        for (u32 i = 0; i < section_count; ++i) {
+            const u8 *section = sections + i * 40u;
+            u32 section_rva = 0u, section_size = 0u, characteristics = 0u;
+            if (!dr_section_range(image_size, section, &section_rva, &section_size, &characteristics)) {
+                dr_set_error("Darktide PE section range is invalid or unreadable");
+                goto failed;
+            }
+            if (section_size >= sizeof(void *) && target_rva >= section_rva &&
+                target_rva - section_rva <= section_size - sizeof(void *) &&
+                (characteristics & 0x80000000u) && !(characteristics & 0x20000000u)) {
+                writable_data = true;
+            }
+        }
+
+        auto **global = reinterpret_cast<u8 **>(global_address);
+        if (!writable_data || (reinterpret_cast<usize>(global) & (sizeof(void *) - 1u)) != 0u ||
+            !readable_range(global, sizeof(void *))) {
+            dr_set_error("render-device global slot failed validation");
+            goto failed;
+        }
+
+        u8 *callsite = base + setup_match + 0x14u;
+        u8 *aligned = callsite - 1u;
+        static const u8 patch_bytes[8] = {0xc2, 0x48, 0x8b, 0x01, 0xff, 0x50, 0x40, 0x4c};
+        if ((reinterpret_cast<usize>(aligned) & 7ull) != 0u || !dr_bytes_equal(aligned, patch_bytes, sizeof(patch_bytes))) {
+            dr_set_error("Present patch site failed alignment or byte validation");
+            goto failed;
+        }
+
+        g_dr_render_device_global = global;
+        g_dr_present_callsite = callsite;
     }
 
     atomic_store_u32(&g_dr_build_ok, 1u);
     atomic_store_u32(&g_dr_build_checked, 1u);
     return true;
+
+failed:
+    atomic_store_u32(&g_dr_build_checked, 1u);
+    return false;
 }
 
 static bool dr_executable_address(void *p) {
@@ -220,12 +358,11 @@ static bool dr_executable_address(void *p) {
 }
 
 static bool dr_read_engine_objects() {
-    if (!dr_validate_exact_build()) {
+    if (!dr_discover_renderer()) {
         return false;
     }
 
-    u8 *base = exe_base();
-    auto **global = reinterpret_cast<u8 **>(base + DR_RENDER_DEVICE_GLOBAL_RVA);
+    auto **global = g_dr_render_device_global;
 
     if (!readable_range(global, sizeof(void *))) {
         dr_set_error("render-device global is unreadable");
@@ -1512,7 +1649,7 @@ static bool dr_install_callsite_hook() {
         return true;
     }
 
-    if (!dr_validate_exact_build()) {
+    if (!dr_discover_renderer()) {
         return false;
     }
 
@@ -1521,8 +1658,7 @@ static bool dr_install_callsite_hook() {
         return false;
     }
 
-    u8 *base = exe_base();
-    u8 *callsite = base + DR_PRESENT_VCALL_RVA;
+    u8 *callsite = g_dr_present_callsite;
     u8 *aligned = callsite - 1u;
 
     if ((reinterpret_cast<usize>(aligned) & 7ull) != 0u) {
@@ -1674,5 +1810,5 @@ static void dr_shutdown() {
 }
 
 static bool dr_build_supported() {
-    return dr_validate_exact_build();
+    return dr_discover_renderer();
 }

@@ -1,0 +1,12 @@
+{
+    "name": "Mourningstar Pets",
+    "author": "fviuff",
+    "version": "1.0.0",
+    "description": "A cat that follows you around the Mourningstar",
+    "order": {
+        "require": ["CustomAssets"],
+        "this_before": [],
+        "this_after": ["CustomAssets"]
+    },
+    "localization": {}
+}
