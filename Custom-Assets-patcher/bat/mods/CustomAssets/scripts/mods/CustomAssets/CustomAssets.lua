@@ -1,10 +1,12 @@
 local mod = get_mod("CustomAssets")
 
-mod.VERSION = "1.0.2"
 mod.API_VERSION = 1
 
-local MANIFEST_PATH = "CustomAssets/generated/manifest"
-local MOD_DIRECTORY = "./../mods/"
+-- plugin install (tools next to the game's binaries), then the bat install (inside this mod)
+local MANIFEST_PATHS = {
+    "./../tools/custom-assets-manifest.lua",
+    "./../mods/CustomAssets/generated/manifest.lua",
+}
 local lua_io = Mods and Mods.lua and Mods.lua.io
 local io_open = lua_io and lua_io.open
 local compile_lua = Mods and Mods.lua and Mods.lua.loadstring
@@ -13,7 +15,7 @@ local function load_lua_file(relative_path)
     if type(io_open) ~= "function" or type(compile_lua) ~= "function" then
         return nil, "Darktide's Lua file APIs are unavailable"
     end
-    local file_path = MOD_DIRECTORY .. relative_path .. ".lua"
+    local file_path = relative_path
     local open_ok, file, open_error = pcall(io_open, file_path, "r")
     if not open_ok then
         return nil, "could not open " .. file_path .. ": " .. tostring(file)
@@ -45,24 +47,19 @@ end
 local function empty_manifest()
     return {
         schema = 2,
-        custom_assets_version = mod.VERSION,
         patch = { resource_count = 0, stream_count = 0, package_count = 0, bundle_count = 0 },
         assets = {},
     }
 end
 
-local manifest_load_error = nil
 local function load_manifest()
-    local value, load_error = load_lua_file(MANIFEST_PATH)
-    if type(value) ~= "table" or value.schema ~= 2 or type(value.assets) ~= "table" then
-        manifest_load_error = tostring(load_error or "unsupported manifest schema")
-        mod:error(
-            "Custom Assets manifest is missing or invalid: %s. Run CUSTOM_ASSETS_PATCH.bat with Darktide closed.",
-            manifest_load_error
-        )
-        return empty_manifest()
+    for _, path in ipairs(MANIFEST_PATHS) do
+        local value = load_lua_file(path)
+        if type(value) == "table" and value.schema == 2 and type(value.assets) == "table" then
+            return value
+        end
     end
-    return value
+    return empty_manifest()
 end
 
 local manifest = load_manifest()
@@ -310,6 +307,33 @@ local function acquire_package(owner, package_name, public_value, verify, callba
     return ticket
 end
 
+-- packages are released two frames late: units destroyed in the same frame still hold their effects (and the
+-- effects their materials) until the next world update, and unloading a package thats still in use crashes the game.
+-- closing the game unloads released packages right away, so nothing is released during shutdown
+local pending_releases = {}
+
+local function release_now(package_manager, package_id)
+    if package_manager ~= (Managers and Managers.package) or package_manager._shutdown_has_started == true then return end
+    local release = package_manager.release
+    if type(release) ~= "function" then return end
+    local ok, err = pcall(release, package_manager, package_id)
+    if not ok then mod:error("package release failed: %s", tostring(err)) end
+end
+
+local function process_releases(all)
+    if #pending_releases == 0 then return end
+    local waiting = {}
+    for _, pending in ipairs(pending_releases) do
+        pending.frames = pending.frames - 1
+        if pending.frames > 0 and not all then
+            waiting[#waiting + 1] = pending
+        else
+            release_now(pending.package_manager, pending.package_id)
+        end
+    end
+    pending_releases = waiting
+end
+
 local function release_ticket(ticket)
     if type(ticket) ~= "table" then return false, "ticket must be a Custom Assets ticket" end
     local record = tickets[ticket]
@@ -322,15 +346,14 @@ local function release_ticket(ticket)
         unregister_ticket(ticket, record, "stale")
         return true
     end
-    local release = package_manager.release
-    if type(release) ~= "function" then return false, "Managers.package.release is unavailable" end
-    local ok, err = pcall(release, package_manager, record.package_id)
-    if not ok then return false, "package release failed: " .. tostring(err) end
+    if type(package_manager.release) ~= "function" then return false, "Managers.package.release is unavailable" end
+    pending_releases[#pending_releases + 1] = { package_manager = package_manager, package_id = record.package_id, frames = 2 }
     unregister_ticket(ticket, record, "released")
     return true
 end
 
 mod.update = function()
+    process_releases(false)
     process_callbacks()
 end
 
@@ -448,9 +471,9 @@ mod.stats = function()
     local active_ticket_count = 0
     for _ in pairs(tickets) do active_ticket_count = active_ticket_count + 1 end
     return {
-        version = mod.VERSION,
         api_version = mod.API_VERSION,
         asset_count = #asset_order,
+        skipped_count = #(manifest.skipped or {}),
         resource_count = manifest.patch and manifest.patch.resource_count or 0,
         stream_count = manifest.patch and manifest.patch.stream_count or 0,
         package_count = manifest.patch and manifest.patch.package_count or 0,
@@ -479,19 +502,10 @@ mod.debug_active_tickets = function()
 end
 
 mod.on_all_mods_loaded = function()
-    if #asset_order == 0 then
-        if manifest_load_error then
-            mod:warning("Custom Assets manifest is unavailable. Close Darktide and run CUSTOM_ASSETS_PATCH.bat.")
-        else
-            mod:info(" %s ready: no assets installed.", mod.VERSION)
-        end
-    else
-        mod:info(
-            " %s ready: %d asset(s), %d resource(s).",
-            mod.VERSION,
-            #asset_order,
-            manifest.patch and manifest.patch.resource_count or 0
-        )
+    mod:info("%d asset(s), %d resource(s).", #asset_order, manifest.patch and manifest.patch.resource_count or 0)
+    local skipped = manifest.skipped or {}
+    if #skipped > 0 then
+        mod:warning("%d asset folder(s) could not be installed, /custom_assets_status lists them", #skipped)
     end
 end
 
@@ -503,26 +517,28 @@ mod.on_unload = function()
         local ok = release_ticket(ticket)
         if not ok then failed = failed + 1 end
     end
-    if failed > 0 then mod:error("Custom Assets could not release %d package reference(s) during unload.", failed) end
+    -- no update runs after this; the game keeps going, so the unloads themselves happen later
+    process_releases(true)
+    if failed > 0 then mod:error("could not release %d package reference(s) during unload", failed) end
     callback_queue = {}
 end
 
-mod:command("custom_assets_status", "Show Custom Assets status", function()
+mod:command("custom_assets_status", "Show Custom Assets status and the asset folders that could not be installed", function()
     local status = mod.stats()
     mod:echo(
-        " %s / API %d / %d asset(s) / %d resource(s) / %d package(s)",
-        status.version,
-        status.api_version,
+        "%d asset(s) / %d resource(s) / %d package(s)",
         status.asset_count,
         status.resource_count,
         status.package_count
     )
-    if manifest_load_error then mod:echo("Manifest error: %s", manifest_load_error) end
+    for _, item in ipairs(manifest.skipped or {}) do
+        mod:echo("%s: %s", tostring(item.folder), tostring(item.reason))
+    end
 end)
 
 mod:command("custom_assets_list", "List installed Custom Assets", function()
     if #asset_order == 0 then
-        mod:echo("No Custom Assets are installed. Run CUSTOM_ASSETS_PATCH.bat with Darktide closed.")
+        mod:echo("No assets are installed. Put them in mods/<YourMod>/Custom/<Folder>/, then restart the game (plugin) or run CUSTOM_ASSETS_PATCH.bat with the game closed")
         return
     end
     for _, logical_id in ipairs(asset_order) do
