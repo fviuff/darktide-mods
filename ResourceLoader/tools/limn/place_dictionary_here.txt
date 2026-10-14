@@ -1,0 +1,1 @@
+Place qasikfwns dictionary_hashcat_dt.txt here: https://gitlab.com/qasikfwn/bitsquid-blender-tools/-/blob/dev/bitsquid/murmur/dictionaries/dictionary_hashcat_dt.txt

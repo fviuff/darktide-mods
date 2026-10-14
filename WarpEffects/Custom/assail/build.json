@@ -1,0 +1,1479 @@
+{
+ "schema": 1,
+ "compiler": {
+  "name": "DarktideGLBCompiler",
+  "version": "0.3.0-beta"
+ },
+ "target": {
+  "id": "darktide",
+  "name": "Warhammer 40,000: Darktide",
+  "unit_version": 115,
+  "material_version": 61
+ },
+ "roots": [
+  {
+   "type": "particles",
+   "name": "content/mods/warp_fx/psyker/psyker_throwing_knife_trail"
+  },
+  {
+   "type": "particles",
+   "name": "content/mods/warp_fx/psyker/psyker_throwing_knife_idle"
+  },
+  {
+   "type": "particles",
+   "name": "content/mods/warp_fx/psyker/psyker_throwing_knife_trail_critical_strike"
+  }
+ ],
+ "artifacts": [
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_69eeb7e1c5363ec1"
+   },
+   "role": "primary",
+   "path": "fx_69eeb7e1c5363ec1.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_69eeb7e1c5363ec1"
+   },
+   "role": "stream",
+   "path": "data/am/d53576f763a9aab0",
+   "size": 1444362
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_1da3fb499f1b939d_23f5e156_a9e8948a"
+   },
+   "role": "primary",
+   "path": "fx_1da3fb499f1b939d_23f5e156_a9e8948a.texture",
+   "size": 743
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_e1e9b30a_7f8a9fc1"
+   },
+   "role": "primary",
+   "path": "fx_ae769af1b7e58108_e1e9b30a_7f8a9fc1.texture",
+   "size": 743
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_e1e9b30a"
+   },
+   "role": "primary",
+   "path": "fx_ae769af1b7e58108_e1e9b30a.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_e1e9b30a"
+   },
+   "role": "stream",
+   "path": "data/am/54d6f722d61f5c4f",
+   "size": 11976
+  },
+  {
+   "resource": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/psyker_throwing_knife_trail"
+   },
+   "role": "primary",
+   "path": "psyker_throwing_knife_trail.particles",
+   "size": 7808
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_d7f1cceaa3f91e10_df1a1039_5201354c"
+   },
+   "role": "primary",
+   "path": "fx_d7f1cceaa3f91e10_df1a1039_5201354c.texture",
+   "size": 743
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+   },
+   "role": "primary",
+   "path": "fx_tex_2ff705504ceae6c5.texture",
+   "size": 17714
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+   },
+   "role": "stream",
+   "path": "data/am/0c29a24860a0d8c0.stream",
+   "size": 51163
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_8b4ebc049db47edb"
+   },
+   "role": "primary",
+   "path": "fx_tex_8b4ebc049db47edb.texture",
+   "size": 12379
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_8b4ebc049db47edb"
+   },
+   "role": "stream",
+   "path": "data/am/3fd8daf90507b61b.stream",
+   "size": 122998
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_94bfb1d2dba31185"
+   },
+   "role": "primary",
+   "path": "fx_tex_94bfb1d2dba31185.texture",
+   "size": 983
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_99c6782b0bfee476"
+   },
+   "role": "primary",
+   "path": "shader_99c6782b0bfee476.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_99c6782b0bfee476"
+   },
+   "role": "stream",
+   "path": "data/am/ba32380f7ff1d529",
+   "size": 162604
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_a0e1479b497c16f2"
+   },
+   "role": "primary",
+   "path": "fx_tex_a0e1479b497c16f2.texture",
+   "size": 8722
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_a0e1479b497c16f2"
+   },
+   "role": "stream",
+   "path": "data/am/501137ea273108a2.stream",
+   "size": 18998
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_d7f1cceaa3f91e10_df1a1039"
+   },
+   "role": "primary",
+   "path": "fx_d7f1cceaa3f91e10_df1a1039.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_d7f1cceaa3f91e10_df1a1039"
+   },
+   "role": "stream",
+   "path": "data/am/fe166ea3b3c630ad",
+   "size": 312
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b274a89be3f5c19e"
+   },
+   "role": "primary",
+   "path": "fx_tex_b274a89be3f5c19e.texture",
+   "size": 21577
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b274a89be3f5c19e"
+   },
+   "role": "stream",
+   "path": "data/am/62e3871b6e021c3c.stream",
+   "size": 54908
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b6e6ebf1778133ef"
+   },
+   "role": "primary",
+   "path": "fx_tex_b6e6ebf1778133ef.texture",
+   "size": 39348
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b6e6ebf1778133ef"
+   },
+   "role": "stream",
+   "path": "data/am/5334651ed2af8ec2.stream",
+   "size": 426436
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_f5080836d5d7c71b"
+   },
+   "role": "primary",
+   "path": "fx_tex_f5080836d5d7c71b.texture",
+   "size": 28160
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_f5080836d5d7c71b"
+   },
+   "role": "stream",
+   "path": "data/am/71292f428e851136.stream",
+   "size": 407647
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_f9db78176d84b670"
+   },
+   "role": "primary",
+   "path": "fx_tex_f9db78176d84b670.texture",
+   "size": 16041
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_11a32cf14b47f554"
+   },
+   "role": "primary",
+   "path": "shader_11a32cf14b47f554.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_11a32cf14b47f554"
+   },
+   "role": "stream",
+   "path": "data/am/1cc763552fca9297",
+   "size": 366120
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_1da3fb499f1b939d_23f5e156"
+   },
+   "role": "primary",
+   "path": "fx_1da3fb499f1b939d_23f5e156.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_1da3fb499f1b939d_23f5e156"
+   },
+   "role": "stream",
+   "path": "data/am/5f844bdd30a3829b",
+   "size": 540
+  },
+  {
+   "resource": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/psyker_throwing_knife_idle"
+   },
+   "role": "primary",
+   "path": "psyker_throwing_knife_idle.particles",
+   "size": 3476
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_91c9506761b873aa"
+   },
+   "role": "primary",
+   "path": "fx_91c9506761b873aa.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_91c9506761b873aa"
+   },
+   "role": "stream",
+   "path": "data/am/709b5807ff03eec0",
+   "size": 14128
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_00a427d265e6d569_5f26a318_a9e8948a"
+   },
+   "role": "primary",
+   "path": "fx_00a427d265e6d569_5f26a318_a9e8948a.texture",
+   "size": 676
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_a7252506_7f8a9fc1"
+   },
+   "role": "primary",
+   "path": "fx_ae769af1b7e58108_a7252506_7f8a9fc1.texture",
+   "size": 676
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_a7252506"
+   },
+   "role": "primary",
+   "path": "fx_ae769af1b7e58108_a7252506.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_a7252506"
+   },
+   "role": "stream",
+   "path": "data/am/a2b7a79ed29c6822",
+   "size": 11976
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_f79e4b3bdc805f9a_22786d76_4bf2a295"
+   },
+   "role": "primary",
+   "path": "fx_f79e4b3bdc805f9a_22786d76_4bf2a295.texture",
+   "size": 676
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_174a0bf31b521e8d"
+   },
+   "role": "primary",
+   "path": "fx_tex_174a0bf31b521e8d.texture",
+   "size": 18911
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_174a0bf31b521e8d"
+   },
+   "role": "stream",
+   "path": "data/am/73f62eccf2c8cb07.stream",
+   "size": 48941
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_2281101895addd7f"
+   },
+   "role": "primary",
+   "path": "fx_tex_2281101895addd7f.texture",
+   "size": 1509
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_23d3373664c5b0e1"
+   },
+   "role": "primary",
+   "path": "fx_tex_23d3373664c5b0e1.texture",
+   "size": 1705
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_332cb99e9a6a4825"
+   },
+   "role": "primary",
+   "path": "fx_tex_332cb99e9a6a4825.texture",
+   "size": 945
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_470708463e83cbb5"
+   },
+   "role": "primary",
+   "path": "fx_tex_470708463e83cbb5.texture",
+   "size": 910
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_48347775f9ac64a8"
+   },
+   "role": "primary",
+   "path": "fx_tex_48347775f9ac64a8.texture",
+   "size": 1625
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_63b5bd3fd54c00c2"
+   },
+   "role": "primary",
+   "path": "fx_tex_63b5bd3fd54c00c2.texture",
+   "size": 186316
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_419d65070721a5d6"
+   },
+   "role": "primary",
+   "path": "shader_419d65070721a5d6.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_419d65070721a5d6"
+   },
+   "role": "stream",
+   "path": "data/am/6d95b6c758d9c9f4",
+   "size": 16948
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ac8f81512a97af97"
+   },
+   "role": "primary",
+   "path": "fx_ac8f81512a97af97.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ac8f81512a97af97"
+   },
+   "role": "stream",
+   "path": "data/am/f6dccb5bcba0054c",
+   "size": 260
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_57e5dc21bea2e3fb"
+   },
+   "role": "primary",
+   "path": "shader_57e5dc21bea2e3fb.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_57e5dc21bea2e3fb"
+   },
+   "role": "stream",
+   "path": "data/am/ce675b13dbc05d15",
+   "size": 401933
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+   },
+   "role": "primary",
+   "path": "fx_tex_9e71cd21e19b6ba1.texture",
+   "size": 17936
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+   },
+   "role": "stream",
+   "path": "data/am/9603cd92be23415a.stream",
+   "size": 45264
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_f79e4b3bdc805f9a_22786d76"
+   },
+   "role": "primary",
+   "path": "fx_f79e4b3bdc805f9a_22786d76.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_f79e4b3bdc805f9a_22786d76"
+   },
+   "role": "stream",
+   "path": "data/am/288baf1605d0214a",
+   "size": 316
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_fcf0c66bdecb0564"
+   },
+   "role": "primary",
+   "path": "fx_tex_fcf0c66bdecb0564.texture",
+   "size": 12530
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_fcf0c66bdecb0564"
+   },
+   "role": "stream",
+   "path": "data/am/7688af40559d189b.stream",
+   "size": 26324
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_00a427d265e6d569_5f26a318"
+   },
+   "role": "primary",
+   "path": "fx_00a427d265e6d569_5f26a318.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_00a427d265e6d569_5f26a318"
+   },
+   "role": "stream",
+   "path": "data/am/2264aa597025e0da",
+   "size": 512
+  },
+  {
+   "resource": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/psyker_throwing_knife_trail_critical_strike"
+   },
+   "role": "primary",
+   "path": "psyker_throwing_knife_trail_critical_strike.particles",
+   "size": 10697
+  }
+ ],
+ "resources": [
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_69eeb7e1c5363ec1"
+   },
+   "name_hash": "91758792c2773bee",
+   "file": {
+    "path": "fx_69eeb7e1c5363ec1.material",
+    "size": 68,
+    "crc32": "795a54e3"
+   },
+   "stream": {
+    "name": "data/am/d53576f763a9aab0",
+    "file": {
+     "path": "data/am/d53576f763a9aab0",
+     "size": 1444362,
+     "crc32": "0341d21b"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_1da3fb499f1b939d_23f5e156_a9e8948a"
+   },
+   "name_hash": "7dff9414e1a0d52e",
+   "file": {
+    "path": "fx_1da3fb499f1b939d_23f5e156_a9e8948a.texture",
+    "size": 743,
+    "crc32": "8ab8016b"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_e1e9b30a_7f8a9fc1"
+   },
+   "name_hash": "72af76c1896b3004",
+   "file": {
+    "path": "fx_ae769af1b7e58108_e1e9b30a_7f8a9fc1.texture",
+    "size": 743,
+    "crc32": "3d463b23"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_e1e9b30a"
+   },
+   "name_hash": "c27d26f926df184e",
+   "file": {
+    "path": "fx_ae769af1b7e58108_e1e9b30a.material",
+    "size": 68,
+    "crc32": "fd9c4fe5"
+   },
+   "stream": {
+    "name": "data/am/54d6f722d61f5c4f",
+    "file": {
+     "path": "data/am/54d6f722d61f5c4f",
+     "size": 11976,
+     "crc32": "6e686aa4"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_e1e9b30a_7f8a9fc1"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/psyker_throwing_knife_trail"
+   },
+   "name_hash": "27e8f6ea6336d557",
+   "file": {
+    "path": "psyker_throwing_knife_trail.particles",
+    "size": 7808,
+    "crc32": "17daf430"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_69eeb7e1c5363ec1"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_e1e9b30a"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_d7f1cceaa3f91e10_df1a1039_5201354c"
+   },
+   "name_hash": "30536b8ea50ee4f7",
+   "file": {
+    "path": "fx_d7f1cceaa3f91e10_df1a1039_5201354c.texture",
+    "size": 743,
+    "crc32": "61322c0d"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+   },
+   "name_hash": "c127c36e1c4b7c1a",
+   "file": {
+    "path": "fx_tex_2ff705504ceae6c5.texture",
+    "size": 17714,
+    "crc32": "b75e5e3f"
+   },
+   "stream": {
+    "name": "data/am/0c29a24860a0d8c0.stream",
+    "file": {
+     "path": "data/am/0c29a24860a0d8c0.stream",
+     "size": 51163,
+     "crc32": "da32bbe0"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_8b4ebc049db47edb"
+   },
+   "name_hash": "de87c94b9c88688e",
+   "file": {
+    "path": "fx_tex_8b4ebc049db47edb.texture",
+    "size": 12379,
+    "crc32": "fd0fad6d"
+   },
+   "stream": {
+    "name": "data/am/3fd8daf90507b61b.stream",
+    "file": {
+     "path": "data/am/3fd8daf90507b61b.stream",
+     "size": 122998,
+     "crc32": "a8c6229d"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_94bfb1d2dba31185"
+   },
+   "name_hash": "3f42943ff545cfc6",
+   "file": {
+    "path": "fx_tex_94bfb1d2dba31185.texture",
+    "size": 983,
+    "crc32": "a938230c"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_99c6782b0bfee476"
+   },
+   "name_hash": "2bc3691f6ae21ca5",
+   "file": {
+    "path": "shader_99c6782b0bfee476.material",
+    "size": 68,
+    "crc32": "a8aef132"
+   },
+   "stream": {
+    "name": "data/am/ba32380f7ff1d529",
+    "file": {
+     "path": "data/am/ba32380f7ff1d529",
+     "size": 162604,
+     "crc32": "a192d83b"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_94bfb1d2dba31185"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_8b4ebc049db47edb"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_a0e1479b497c16f2"
+   },
+   "name_hash": "0ee40c6bd0d027df",
+   "file": {
+    "path": "fx_tex_a0e1479b497c16f2.texture",
+    "size": 8722,
+    "crc32": "093731b2"
+   },
+   "stream": {
+    "name": "data/am/501137ea273108a2.stream",
+    "file": {
+     "path": "data/am/501137ea273108a2.stream",
+     "size": 18998,
+     "crc32": "07bdfb2d"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_d7f1cceaa3f91e10_df1a1039"
+   },
+   "name_hash": "6696c7a8cf0d76ee",
+   "file": {
+    "path": "fx_d7f1cceaa3f91e10_df1a1039.material",
+    "size": 68,
+    "crc32": "d0705d65"
+   },
+   "stream": {
+    "name": "data/am/fe166ea3b3c630ad",
+    "file": {
+     "path": "data/am/fe166ea3b3c630ad",
+     "size": 312,
+     "crc32": "76fd9a67"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_d7f1cceaa3f91e10_df1a1039_5201354c"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_a0e1479b497c16f2"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_99c6782b0bfee476"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b274a89be3f5c19e"
+   },
+   "name_hash": "9f8e303420a92012",
+   "file": {
+    "path": "fx_tex_b274a89be3f5c19e.texture",
+    "size": 21577,
+    "crc32": "6986a940"
+   },
+   "stream": {
+    "name": "data/am/62e3871b6e021c3c.stream",
+    "file": {
+     "path": "data/am/62e3871b6e021c3c.stream",
+     "size": 54908,
+     "crc32": "c4ea93ca"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b6e6ebf1778133ef"
+   },
+   "name_hash": "3b34b436dbf70df3",
+   "file": {
+    "path": "fx_tex_b6e6ebf1778133ef.texture",
+    "size": 39348,
+    "crc32": "61ff34c0"
+   },
+   "stream": {
+    "name": "data/am/5334651ed2af8ec2.stream",
+    "file": {
+     "path": "data/am/5334651ed2af8ec2.stream",
+     "size": 426436,
+     "crc32": "7335b1fe"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_f5080836d5d7c71b"
+   },
+   "name_hash": "3f44d7c461dd181a",
+   "file": {
+    "path": "fx_tex_f5080836d5d7c71b.texture",
+    "size": 28160,
+    "crc32": "b20fc046"
+   },
+   "stream": {
+    "name": "data/am/71292f428e851136.stream",
+    "file": {
+     "path": "data/am/71292f428e851136.stream",
+     "size": 407647,
+     "crc32": "5bf4752d"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_f9db78176d84b670"
+   },
+   "name_hash": "275c7846d9a87d9d",
+   "file": {
+    "path": "fx_tex_f9db78176d84b670.texture",
+    "size": 16041,
+    "crc32": "11ec9495"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_11a32cf14b47f554"
+   },
+   "name_hash": "d2f35e33e299351c",
+   "file": {
+    "path": "shader_11a32cf14b47f554.material",
+    "size": 68,
+    "crc32": "020e58e3"
+   },
+   "stream": {
+    "name": "data/am/1cc763552fca9297",
+    "file": {
+     "path": "data/am/1cc763552fca9297",
+     "size": 366120,
+     "crc32": "d127781f"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_b6e6ebf1778133ef"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_f9db78176d84b670"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_b274a89be3f5c19e"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_94bfb1d2dba31185"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_1da3fb499f1b939d_23f5e156"
+   },
+   "name_hash": "93b14e57c68237b3",
+   "file": {
+    "path": "fx_1da3fb499f1b939d_23f5e156.material",
+    "size": 68,
+    "crc32": "b18a411e"
+   },
+   "stream": {
+    "name": "data/am/5f844bdd30a3829b",
+    "file": {
+     "path": "data/am/5f844bdd30a3829b",
+     "size": 540,
+     "crc32": "39574905"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_b6e6ebf1778133ef"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_f9db78176d84b670"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_f5080836d5d7c71b"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_1da3fb499f1b939d_23f5e156_a9e8948a"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_11a32cf14b47f554"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/psyker_throwing_knife_idle"
+   },
+   "name_hash": "726e59987ce159f5",
+   "file": {
+    "path": "psyker_throwing_knife_idle.particles",
+    "size": 3476,
+    "crc32": "dfdb0d40"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_d7f1cceaa3f91e10_df1a1039"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_1da3fb499f1b939d_23f5e156"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_91c9506761b873aa"
+   },
+   "name_hash": "ed1e810fa8b795fd",
+   "file": {
+    "path": "fx_91c9506761b873aa.material",
+    "size": 68,
+    "crc32": "037c8d12"
+   },
+   "stream": {
+    "name": "data/am/709b5807ff03eec0",
+    "file": {
+     "path": "data/am/709b5807ff03eec0",
+     "size": 14128,
+     "crc32": "2c507f3e"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_00a427d265e6d569_5f26a318_a9e8948a"
+   },
+   "name_hash": "5aed83697a22fc4a",
+   "file": {
+    "path": "fx_00a427d265e6d569_5f26a318_a9e8948a.texture",
+    "size": 676,
+    "crc32": "9dd8379d"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_a7252506_7f8a9fc1"
+   },
+   "name_hash": "a2f761f5e64e8ec0",
+   "file": {
+    "path": "fx_ae769af1b7e58108_a7252506_7f8a9fc1.texture",
+    "size": 676,
+    "crc32": "0c07470f"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_a7252506"
+   },
+   "name_hash": "a9b3c1c0bf33fd71",
+   "file": {
+    "path": "fx_ae769af1b7e58108_a7252506.material",
+    "size": 68,
+    "crc32": "5a3dfe71"
+   },
+   "stream": {
+    "name": "data/am/a2b7a79ed29c6822",
+    "file": {
+     "path": "data/am/a2b7a79ed29c6822",
+     "size": 11976,
+     "crc32": "d959913c"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_a7252506_7f8a9fc1"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_f79e4b3bdc805f9a_22786d76_4bf2a295"
+   },
+   "name_hash": "a5d91468312c1c78",
+   "file": {
+    "path": "fx_f79e4b3bdc805f9a_22786d76_4bf2a295.texture",
+    "size": 676,
+    "crc32": "7744901d"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_174a0bf31b521e8d"
+   },
+   "name_hash": "429fec6fcb54192a",
+   "file": {
+    "path": "fx_tex_174a0bf31b521e8d.texture",
+    "size": 18911,
+    "crc32": "bbc2561c"
+   },
+   "stream": {
+    "name": "data/am/73f62eccf2c8cb07.stream",
+    "file": {
+     "path": "data/am/73f62eccf2c8cb07.stream",
+     "size": 48941,
+     "crc32": "139961bd"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_2281101895addd7f"
+   },
+   "name_hash": "a0c51c22fddb5bea",
+   "file": {
+    "path": "fx_tex_2281101895addd7f.texture",
+    "size": 1509,
+    "crc32": "21cbe996"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_23d3373664c5b0e1"
+   },
+   "name_hash": "534f95af554380ca",
+   "file": {
+    "path": "fx_tex_23d3373664c5b0e1.texture",
+    "size": 1705,
+    "crc32": "d53f6819"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_332cb99e9a6a4825"
+   },
+   "name_hash": "43ed669fb98ba95d",
+   "file": {
+    "path": "fx_tex_332cb99e9a6a4825.texture",
+    "size": 945,
+    "crc32": "4146cc4f"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_470708463e83cbb5"
+   },
+   "name_hash": "aa1c512b4931b1e1",
+   "file": {
+    "path": "fx_tex_470708463e83cbb5.texture",
+    "size": 910,
+    "crc32": "6984bd5c"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_48347775f9ac64a8"
+   },
+   "name_hash": "354aabc871443a58",
+   "file": {
+    "path": "fx_tex_48347775f9ac64a8.texture",
+    "size": 1625,
+    "crc32": "e4dac9e3"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_63b5bd3fd54c00c2"
+   },
+   "name_hash": "4da98f0306366def",
+   "file": {
+    "path": "fx_tex_63b5bd3fd54c00c2.texture",
+    "size": 186316,
+    "crc32": "eab405e6"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_419d65070721a5d6"
+   },
+   "name_hash": "a8efe758d3b76daf",
+   "file": {
+    "path": "shader_419d65070721a5d6.material",
+    "size": 68,
+    "crc32": "0e9c0553"
+   },
+   "stream": {
+    "name": "data/am/6d95b6c758d9c9f4",
+    "file": {
+     "path": "data/am/6d95b6c758d9c9f4",
+     "size": 16948,
+     "crc32": "1de138e8"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_48347775f9ac64a8"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_63b5bd3fd54c00c2"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ac8f81512a97af97"
+   },
+   "name_hash": "eddac612d3dd4daa",
+   "file": {
+    "path": "fx_ac8f81512a97af97.material",
+    "size": 68,
+    "crc32": "04cc06be"
+   },
+   "stream": {
+    "name": "data/am/f6dccb5bcba0054c",
+    "file": {
+     "path": "data/am/f6dccb5bcba0054c",
+     "size": 260,
+     "crc32": "68376244"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_2281101895addd7f"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_63b5bd3fd54c00c2"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_419d65070721a5d6"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_57e5dc21bea2e3fb"
+   },
+   "name_hash": "9e29eb15f8dbb550",
+   "file": {
+    "path": "shader_57e5dc21bea2e3fb.material",
+    "size": 68,
+    "crc32": "1676368b"
+   },
+   "stream": {
+    "name": "data/am/ce675b13dbc05d15",
+    "file": {
+     "path": "data/am/ce675b13dbc05d15",
+     "size": 401933,
+     "crc32": "43b6a0d4"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_332cb99e9a6a4825"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_94bfb1d2dba31185"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_23d3373664c5b0e1"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+   },
+   "name_hash": "c0d1b2def6ba3a9a",
+   "file": {
+    "path": "fx_tex_9e71cd21e19b6ba1.texture",
+    "size": 17936,
+    "crc32": "78646d0f"
+   },
+   "stream": {
+    "name": "data/am/9603cd92be23415a.stream",
+    "file": {
+     "path": "data/am/9603cd92be23415a.stream",
+     "size": 45264,
+     "crc32": "91f39ae6"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_f79e4b3bdc805f9a_22786d76"
+   },
+   "name_hash": "87d75b02466bf6ed",
+   "file": {
+    "path": "fx_f79e4b3bdc805f9a_22786d76.material",
+    "size": 68,
+    "crc32": "6c6ae411"
+   },
+   "stream": {
+    "name": "data/am/288baf1605d0214a",
+    "file": {
+     "path": "data/am/288baf1605d0214a",
+     "size": 316,
+     "crc32": "48e0286c"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_470708463e83cbb5"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_f79e4b3bdc805f9a_22786d76_4bf2a295"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_a0e1479b497c16f2"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_57e5dc21bea2e3fb"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_fcf0c66bdecb0564"
+   },
+   "name_hash": "a325e3b44ba1dfaa",
+   "file": {
+    "path": "fx_tex_fcf0c66bdecb0564.texture",
+    "size": 12530,
+    "crc32": "ae54038c"
+   },
+   "stream": {
+    "name": "data/am/7688af40559d189b.stream",
+    "file": {
+     "path": "data/am/7688af40559d189b.stream",
+     "size": 26324,
+     "crc32": "db957264"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_00a427d265e6d569_5f26a318"
+   },
+   "name_hash": "d1c40b5fe58b0347",
+   "file": {
+    "path": "fx_00a427d265e6d569_5f26a318.material",
+    "size": 68,
+    "crc32": "ece4623e"
+   },
+   "stream": {
+    "name": "data/am/2264aa597025e0da",
+    "file": {
+     "path": "data/am/2264aa597025e0da",
+     "size": 512,
+     "crc32": "d770d26a"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_174a0bf31b521e8d"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_fcf0c66bdecb0564"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_00a427d265e6d569_5f26a318_a9e8948a"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_11a32cf14b47f554"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/psyker_throwing_knife_trail_critical_strike"
+   },
+   "name_hash": "ab48334c32b4b32c",
+   "file": {
+    "path": "psyker_throwing_knife_trail_critical_strike.particles",
+    "size": 10697,
+    "crc32": "c1bdf650"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_69eeb7e1c5363ec1"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_ae769af1b7e58108_a7252506"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_91c9506761b873aa"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_ac8f81512a97af97"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_f79e4b3bdc805f9a_22786d76"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_00a427d265e6d569_5f26a318"
+    }
+   ]
+  }
+ ],
+ "external_resources": []
+}

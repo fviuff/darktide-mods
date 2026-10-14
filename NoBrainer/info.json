@@ -1,0 +1,12 @@
+{
+    "name": "NoBrainer ;)",
+    "author": "fviuff",
+    "version": "1.0.0",
+    "description": "Mathematical mapping and LineObject visualizers for Darktide: topology, surface reconstruction, collision geometry, point-cloud analysis, chaotic systems, knots, parametric surfaces, and flow fields.",
+    "order": {
+        "require": [],
+        "this_before": [],
+        "this_after": []
+    },
+    "localization": {}
+}

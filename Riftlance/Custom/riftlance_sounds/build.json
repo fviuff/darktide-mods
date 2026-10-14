@@ -1,0 +1,141 @@
+{
+ "schema": 1,
+ "compiler": {
+  "name": "wwise_sounds.py (dev)"
+ },
+ "target": {
+  "id": "darktide",
+  "name": "Warhammer 40,000: Darktide"
+ },
+ "roots": [
+  {
+   "type": "wwise_event",
+   "name": "wwise/events/riftlance/play_riftlance_rift_explosion_01"
+  },
+  {
+   "type": "wwise_event",
+   "name": "wwise/events/riftlance/play_riftlance_rift_explosion_02"
+  },
+  {
+   "type": "wwise_event",
+   "name": "wwise/events/riftlance/play_riftlance_rift_explosion_03"
+  },
+  {
+   "type": "wwise_event",
+   "name": "wwise/events/riftlance/play_riftlance_rift_explosion_04"
+  },
+  {
+   "type": "wwise_event",
+   "name": "wwise/events/riftlance/play_riftlance_rift_explosion_05"
+  },
+  {
+   "type": "wwise_event",
+   "name": "wwise/events/riftlance/play_riftlance_beam_loop"
+  },
+  {
+   "type": "wwise_event",
+   "name": "wwise/events/riftlance/play_riftlance_control_pickup"
+  }
+ ],
+ "resources": [
+  {
+   "key": {
+    "type": "wwise_event",
+    "name": "wwise/events/riftlance/play_riftlance_rift_explosion_01"
+   },
+   "name_hash": "fe0cd8aa2b372283",
+   "file": {
+    "path": "play_riftlance_rift_explosion_01.wwise_event",
+    "size": 193089,
+    "crc32": "2d28f87c"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "wwise_event",
+    "name": "wwise/events/riftlance/play_riftlance_rift_explosion_02"
+   },
+   "name_hash": "c76e07b7fd5a01e4",
+   "file": {
+    "path": "play_riftlance_rift_explosion_02.wwise_event",
+    "size": 192853,
+    "crc32": "aeb7ba83"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "wwise_event",
+    "name": "wwise/events/riftlance/play_riftlance_rift_explosion_03"
+   },
+   "name_hash": "19ce73aea261d7c2",
+   "file": {
+    "path": "play_riftlance_rift_explosion_03.wwise_event",
+    "size": 192995,
+    "crc32": "a0e07679"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "wwise_event",
+    "name": "wwise/events/riftlance/play_riftlance_rift_explosion_04"
+   },
+   "name_hash": "578daf6e0d858be7",
+   "file": {
+    "path": "play_riftlance_rift_explosion_04.wwise_event",
+    "size": 193207,
+    "crc32": "869082b1"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "wwise_event",
+    "name": "wwise/events/riftlance/play_riftlance_rift_explosion_05"
+   },
+   "name_hash": "73f83439dc499912",
+   "file": {
+    "path": "play_riftlance_rift_explosion_05.wwise_event",
+    "size": 181825,
+    "crc32": "35c771c0"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "wwise_event",
+    "name": "wwise/events/riftlance/play_riftlance_beam_loop"
+   },
+   "name_hash": "fac8ae351147bf78",
+   "file": {
+    "path": "play_riftlance_beam_loop.wwise_event",
+    "size": 576710,
+    "crc32": "f0c0ce42"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "wwise_event",
+    "name": "wwise/events/riftlance/play_riftlance_control_pickup"
+   },
+   "name_hash": "9f2f9c4a07c9f924",
+   "file": {
+    "path": "play_riftlance_control_pickup.wwise_event",
+    "size": 9657,
+    "crc32": "eb5f1f96"
+   },
+   "stream": null,
+   "dependencies": []
+  }
+ ],
+ "external_resources": []
+}

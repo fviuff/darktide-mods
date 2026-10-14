@@ -1,0 +1,12 @@
+{
+    "name": "Resource Loader",
+    "author": "fviuff",
+    "version": "1.0.1",
+    "description": "Load packages. 1.12.5",
+    "order": {
+        "require": [],
+        "this_before": [],
+        "this_after": []
+    },
+    "localization": {}
+}

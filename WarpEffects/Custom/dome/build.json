@@ -1,0 +1,4753 @@
+{
+ "schema": 1,
+ "compiler": {
+  "name": "DarktideGLBCompiler",
+  "version": "0.3.0-beta"
+ },
+ "target": {
+  "id": "darktide",
+  "name": "Warhammer 40,000: Darktide",
+  "unit_version": 115,
+  "material_version": 61
+ },
+ "roots": [
+  {
+   "type": "particles",
+   "name": "content/mods/warp_fx/psyker/psyker_shield_block"
+  },
+  {
+   "type": "particles",
+   "name": "content/mods/warp_fx/psyker/protectorate_sphere_shield_init"
+  },
+  {
+   "type": "particles",
+   "name": "content/mods/warp_fx/psyker/protectorate_sphere_shield_fade"
+  },
+  {
+   "type": "unit",
+   "name": "content/mods/warp_fx/psyker/shield_hex"
+  },
+  {
+   "type": "animation",
+   "name": "content/mods/warp_fx/psyker/shield_hex_animation_0"
+  }
+ ],
+ "artifacts": [
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_fd8a24d7fbc56919"
+   },
+   "role": "primary",
+   "path": "fx_fd8a24d7fbc56919.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_fd8a24d7fbc56919"
+   },
+   "role": "stream",
+   "path": "data/am/93fed9e108349463",
+   "size": 13592
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_2d0cedfca4b32d1b_e3f5aed6_c3458c80"
+   },
+   "role": "primary",
+   "path": "fx_2d0cedfca4b32d1b_e3f5aed6_c3458c80.texture",
+   "size": 743
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_ca5c70aecb8dce11_bcf26b1e_0b3bc61f"
+   },
+   "role": "primary",
+   "path": "fx_ca5c70aecb8dce11_bcf26b1e_0b3bc61f.texture",
+   "size": 743
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_df10ea5dbc96aed7_e3f5aed6_c3458c80"
+   },
+   "role": "primary",
+   "path": "fx_df10ea5dbc96aed7_e3f5aed6_c3458c80.texture",
+   "size": 743
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_015901e1ba958029"
+   },
+   "role": "primary",
+   "path": "fx_tex_015901e1ba958029.texture",
+   "size": 924
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_23d3373664c5b0e1"
+   },
+   "role": "primary",
+   "path": "fx_tex_23d3373664c5b0e1.texture",
+   "size": 1705
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_e0dbd1199aa92203"
+   },
+   "role": "primary",
+   "path": "shader_e0dbd1199aa92203.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_e0dbd1199aa92203"
+   },
+   "role": "stream",
+   "path": "data/am/a8608e4d4d90340f",
+   "size": 1808468
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+   },
+   "role": "primary",
+   "path": "fx_tex_2ff705504ceae6c5.texture",
+   "size": 17714
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+   },
+   "role": "stream",
+   "path": "data/am/0c29a24860a0d8c0.stream",
+   "size": 51163
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_3fcee74631e75dbd"
+   },
+   "role": "primary",
+   "path": "fx_tex_3fcee74631e75dbd.texture",
+   "size": 908
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_f828582d7d2822cb"
+   },
+   "role": "primary",
+   "path": "shader_f828582d7d2822cb.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_f828582d7d2822cb"
+   },
+   "role": "stream",
+   "path": "data/am/2aa9f9d28c185746",
+   "size": 411732
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_45a7c6d858a65270"
+   },
+   "role": "primary",
+   "path": "fx_tex_45a7c6d858a65270.texture",
+   "size": 16169
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_45a7c6d858a65270"
+   },
+   "role": "stream",
+   "path": "data/am/735985ad2e66b491.stream",
+   "size": 215781
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_48347775f9ac64a8"
+   },
+   "role": "primary",
+   "path": "fx_tex_48347775f9ac64a8.texture",
+   "size": 1625
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_63b5bd3fd54c00c2"
+   },
+   "role": "primary",
+   "path": "fx_tex_63b5bd3fd54c00c2.texture",
+   "size": 186316
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_419d65070721a5d6"
+   },
+   "role": "primary",
+   "path": "shader_419d65070721a5d6.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_419d65070721a5d6"
+   },
+   "role": "stream",
+   "path": "data/am/6d95b6c758d9c9f4",
+   "size": 16948
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_6c8fb6038edb5d45"
+   },
+   "role": "primary",
+   "path": "fx_tex_6c8fb6038edb5d45.texture",
+   "size": 5772
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_6c8fb6038edb5d45"
+   },
+   "role": "stream",
+   "path": "data/am/339c14333c0bcc5a.stream",
+   "size": 13671
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_ad24d0b6e523c8ea"
+   },
+   "role": "primary",
+   "path": "shader_ad24d0b6e523c8ea.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_ad24d0b6e523c8ea"
+   },
+   "role": "stream",
+   "path": "data/am/d518f68a87fc03e1",
+   "size": 146564
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_8b83f895bc69b828_61ce1d6c"
+   },
+   "role": "primary",
+   "path": "fx_8b83f895bc69b828_61ce1d6c.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_8b83f895bc69b828_61ce1d6c"
+   },
+   "role": "stream",
+   "path": "data/am/91fe785617b1f008",
+   "size": 380
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_7f12376aa6765036"
+   },
+   "role": "primary",
+   "path": "fx_tex_7f12376aa6765036.texture",
+   "size": 17521
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_7f12376aa6765036"
+   },
+   "role": "stream",
+   "path": "data/am/d50e737bdd7e9b1c.stream",
+   "size": 42216
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ca5c70aecb8dce11_bcf26b1e"
+   },
+   "role": "primary",
+   "path": "fx_ca5c70aecb8dce11_bcf26b1e.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ca5c70aecb8dce11_bcf26b1e"
+   },
+   "role": "stream",
+   "path": "data/am/b99ef77f2ac84aa4",
+   "size": 112108
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_909f0d3e2db365e2"
+   },
+   "role": "primary",
+   "path": "fx_tex_909f0d3e2db365e2.texture",
+   "size": 16542
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_909f0d3e2db365e2"
+   },
+   "role": "stream",
+   "path": "data/am/3c40fb4b8ef5f959.stream",
+   "size": 224433
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+   },
+   "role": "primary",
+   "path": "fx_tex_9e71cd21e19b6ba1.texture",
+   "size": 17936
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+   },
+   "role": "stream",
+   "path": "data/am/9603cd92be23415a.stream",
+   "size": 45264
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b274a89be3f5c19e"
+   },
+   "role": "primary",
+   "path": "fx_tex_b274a89be3f5c19e.texture",
+   "size": 21577
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b274a89be3f5c19e"
+   },
+   "role": "stream",
+   "path": "data/am/62e3871b6e021c3c.stream",
+   "size": 54908
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b6d14f6b71cb6710"
+   },
+   "role": "primary",
+   "path": "fx_tex_b6d14f6b71cb6710.texture",
+   "size": 1074
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_bdeca3a33390885e"
+   },
+   "role": "primary",
+   "path": "fx_tex_bdeca3a33390885e.texture",
+   "size": 30282
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_bdeca3a33390885e"
+   },
+   "role": "stream",
+   "path": "data/am/a234a4caaa4e9397.stream",
+   "size": 83188
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_c269aec71600f819"
+   },
+   "role": "primary",
+   "path": "fx_c269aec71600f819.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_c269aec71600f819"
+   },
+   "role": "stream",
+   "path": "data/am/8066e27d03bc6018",
+   "size": 92756
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_ce496ebbc86be85d"
+   },
+   "role": "primary",
+   "path": "fx_tex_ce496ebbc86be85d.texture",
+   "size": 983
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_dbc78d9223242b59"
+   },
+   "role": "primary",
+   "path": "fx_tex_dbc78d9223242b59.texture",
+   "size": 15210
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_dbc78d9223242b59"
+   },
+   "role": "stream",
+   "path": "data/am/ca0177d4785207fe.stream",
+   "size": 146619
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_1a9846562ad58908"
+   },
+   "role": "primary",
+   "path": "fx_1a9846562ad58908.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_1a9846562ad58908"
+   },
+   "role": "stream",
+   "path": "data/am/6a48f0fc244f8b6e",
+   "size": 132716
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_df10ea5dbc96aed7_e3f5aed6"
+   },
+   "role": "primary",
+   "path": "fx_df10ea5dbc96aed7_e3f5aed6.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_df10ea5dbc96aed7_e3f5aed6"
+   },
+   "role": "stream",
+   "path": "data/am/dd2be3ee3eb8876b",
+   "size": 132916
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_df10ea5dbc96aed7"
+   },
+   "role": "primary",
+   "path": "shader_df10ea5dbc96aed7.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_df10ea5dbc96aed7"
+   },
+   "role": "stream",
+   "path": "data/am/d149d14a37c345c5",
+   "size": 132916
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_2d0cedfca4b32d1b_e3f5aed6"
+   },
+   "role": "primary",
+   "path": "fx_2d0cedfca4b32d1b_e3f5aed6.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_2d0cedfca4b32d1b_e3f5aed6"
+   },
+   "role": "stream",
+   "path": "data/am/db526b2c2cdfa812",
+   "size": 264
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_f8666b77180cf6f4"
+   },
+   "role": "primary",
+   "path": "fx_tex_f8666b77180cf6f4.texture",
+   "size": 1412
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_a1810eaa8dcf1f48"
+   },
+   "role": "primary",
+   "path": "fx_a1810eaa8dcf1f48.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_a1810eaa8dcf1f48"
+   },
+   "role": "stream",
+   "path": "data/am/9cce22d6f148d45f",
+   "size": 248
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_fcf0c66bdecb0564"
+   },
+   "role": "primary",
+   "path": "fx_tex_fcf0c66bdecb0564.texture",
+   "size": 12530
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_fcf0c66bdecb0564"
+   },
+   "role": "stream",
+   "path": "data/am/7688af40559d189b.stream",
+   "size": 26324
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_0ff8b8d7ff1258fa_11024279"
+   },
+   "role": "primary",
+   "path": "fx_0ff8b8d7ff1258fa_11024279.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_0ff8b8d7ff1258fa_11024279"
+   },
+   "role": "stream",
+   "path": "data/am/e45786a7a667c4ce",
+   "size": 488
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_f0e38c65b6eeb1f0_c9cdcebb"
+   },
+   "role": "primary",
+   "path": "fx_f0e38c65b6eeb1f0_c9cdcebb.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_f0e38c65b6eeb1f0_c9cdcebb"
+   },
+   "role": "stream",
+   "path": "data/am/f6e0ec391a4b9bcf",
+   "size": 476
+  },
+  {
+   "resource": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/psyker_shield_block"
+   },
+   "role": "primary",
+   "path": "psyker_shield_block.particles",
+   "size": 1721
+  },
+  {
+   "resource": {
+    "type": "unit",
+    "name": "content/mods/warp_fx/shared/fx_unit_801081fc7b22b90f"
+   },
+   "role": "primary",
+   "path": "fx_unit_801081fc7b22b90f.unit",
+   "size": 46539
+  },
+  {
+   "resource": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/protectorate_sphere_shield_fade"
+   },
+   "role": "primary",
+   "path": "protectorate_sphere_shield_fade.particles",
+   "size": 2410
+  },
+  {
+   "resource": {
+    "type": "unit",
+    "name": "content/mods/warp_fx/shared/fx_unit_c83f310bfaf62ebe"
+   },
+   "role": "primary",
+   "path": "fx_unit_c83f310bfaf62ebe.unit",
+   "size": 10376
+  },
+  {
+   "resource": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/protectorate_sphere_shield_init"
+   },
+   "role": "primary",
+   "path": "protectorate_sphere_shield_init.particles",
+   "size": 7147
+  },
+  {
+   "resource": {
+    "type": "bones",
+    "name": "content/mods/warp_fx/psyker/shield_hex_bones"
+   },
+   "role": "primary",
+   "path": "shield_hex_bones.bones",
+   "size": 2210
+  },
+  {
+   "resource": {
+    "type": "animation",
+    "name": "content/mods/warp_fx/psyker/shield_hex_animation_0"
+   },
+   "role": "primary",
+   "path": "shield_hex_animation_0.animation",
+   "size": 752018
+  },
+  {
+   "resource": {
+    "type": "state_machine",
+    "name": "content/mods/warp_fx/psyker/shield_hex"
+   },
+   "role": "primary",
+   "path": "shield_hex.state_machine",
+   "size": 267
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0_base_color"
+   },
+   "role": "primary",
+   "path": "shield_hex_material_0_base_color.texture",
+   "size": 798
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0_base_color"
+   },
+   "role": "stream",
+   "path": "data/am/ca5ca49c435df8f2.stream",
+   "size": 1742
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0_emissive"
+   },
+   "role": "primary",
+   "path": "shield_hex_material_0_emissive.texture",
+   "size": 1033
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0_emissive"
+   },
+   "role": "stream",
+   "path": "data/am/afebe02b6cc279e7.stream",
+   "size": 1114
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0_normal"
+   },
+   "role": "primary",
+   "path": "shield_hex_material_0_normal.texture",
+   "size": 357
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0_normal"
+   },
+   "role": "stream",
+   "path": "data/am/9eae512cbb0b2b1d.stream",
+   "size": 215
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0"
+   },
+   "role": "primary",
+   "path": "shield_hex_material_0.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0"
+   },
+   "role": "stream",
+   "path": "data/am/605e83775a455307",
+   "size": 136760
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1_base_color"
+   },
+   "role": "primary",
+   "path": "shield_hex_material_1_base_color.texture",
+   "size": 798
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1_base_color"
+   },
+   "role": "stream",
+   "path": "data/am/e72c96a7269778ea.stream",
+   "size": 1742
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1_emissive"
+   },
+   "role": "primary",
+   "path": "shield_hex_material_1_emissive.texture",
+   "size": 1033
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1_emissive"
+   },
+   "role": "stream",
+   "path": "data/am/6337cde755066560.stream",
+   "size": 1114
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1_normal"
+   },
+   "role": "primary",
+   "path": "shield_hex_material_1_normal.texture",
+   "size": 357
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1_normal"
+   },
+   "role": "stream",
+   "path": "data/am/85a266499da2d77c.stream",
+   "size": 215
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1"
+   },
+   "role": "primary",
+   "path": "shield_hex_material_1.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1"
+   },
+   "role": "stream",
+   "path": "data/am/cd9a58ade3dd3d77",
+   "size": 136760
+  },
+  {
+   "resource": {
+    "type": "unit",
+    "name": "content/mods/warp_fx/psyker/shield_hex"
+   },
+   "role": "primary",
+   "path": "shield_hex.unit",
+   "size": 474589
+  }
+ ],
+ "resources": [
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_fd8a24d7fbc56919"
+   },
+   "name_hash": "053ef95de338f485",
+   "file": {
+    "path": "fx_fd8a24d7fbc56919.material",
+    "size": 68,
+    "crc32": "12c0fca8"
+   },
+   "stream": {
+    "name": "data/am/93fed9e108349463",
+    "file": {
+     "path": "data/am/93fed9e108349463",
+     "size": 13592,
+     "crc32": "28103340"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_2d0cedfca4b32d1b_e3f5aed6_c3458c80"
+   },
+   "name_hash": "43168f3a52efea85",
+   "file": {
+    "path": "fx_2d0cedfca4b32d1b_e3f5aed6_c3458c80.texture",
+    "size": 743,
+    "crc32": "c3b7dd6b"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_ca5c70aecb8dce11_bcf26b1e_0b3bc61f"
+   },
+   "name_hash": "61cf4b2fe3a7592c",
+   "file": {
+    "path": "fx_ca5c70aecb8dce11_bcf26b1e_0b3bc61f.texture",
+    "size": 743,
+    "crc32": "549d9a89"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_df10ea5dbc96aed7_e3f5aed6_c3458c80"
+   },
+   "name_hash": "8bd02d14d6508d6a",
+   "file": {
+    "path": "fx_df10ea5dbc96aed7_e3f5aed6_c3458c80.texture",
+    "size": 743,
+    "crc32": "82ed1408"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_015901e1ba958029"
+   },
+   "name_hash": "4fe1efed0825e081",
+   "file": {
+    "path": "fx_tex_015901e1ba958029.texture",
+    "size": 924,
+    "crc32": "8391fb09"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_23d3373664c5b0e1"
+   },
+   "name_hash": "534f95af554380ca",
+   "file": {
+    "path": "fx_tex_23d3373664c5b0e1.texture",
+    "size": 1705,
+    "crc32": "d53f6819"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_e0dbd1199aa92203"
+   },
+   "name_hash": "654ee4120bfe3122",
+   "file": {
+    "path": "shader_e0dbd1199aa92203.material",
+    "size": 68,
+    "crc32": "6130092e"
+   },
+   "stream": {
+    "name": "data/am/a8608e4d4d90340f",
+    "file": {
+     "path": "data/am/a8608e4d4d90340f",
+     "size": 1808468,
+     "crc32": "d65e54e1"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_23d3373664c5b0e1"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+   },
+   "name_hash": "c127c36e1c4b7c1a",
+   "file": {
+    "path": "fx_tex_2ff705504ceae6c5.texture",
+    "size": 17714,
+    "crc32": "b75e5e3f"
+   },
+   "stream": {
+    "name": "data/am/0c29a24860a0d8c0.stream",
+    "file": {
+     "path": "data/am/0c29a24860a0d8c0.stream",
+     "size": 51163,
+     "crc32": "da32bbe0"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_3fcee74631e75dbd"
+   },
+   "name_hash": "7fa3aef4fbf3a3e1",
+   "file": {
+    "path": "fx_tex_3fcee74631e75dbd.texture",
+    "size": 908,
+    "crc32": "29756a9d"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_f828582d7d2822cb"
+   },
+   "name_hash": "8851a659bda2d31d",
+   "file": {
+    "path": "shader_f828582d7d2822cb.material",
+    "size": 68,
+    "crc32": "69e07306"
+   },
+   "stream": {
+    "name": "data/am/2aa9f9d28c185746",
+    "file": {
+     "path": "data/am/2aa9f9d28c185746",
+     "size": 411732,
+     "crc32": "b0050b92"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_3fcee74631e75dbd"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_45a7c6d858a65270"
+   },
+   "name_hash": "98d9128a0540a525",
+   "file": {
+    "path": "fx_tex_45a7c6d858a65270.texture",
+    "size": 16169,
+    "crc32": "7a3fb061"
+   },
+   "stream": {
+    "name": "data/am/735985ad2e66b491.stream",
+    "file": {
+     "path": "data/am/735985ad2e66b491.stream",
+     "size": 215781,
+     "crc32": "67745b6b"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_48347775f9ac64a8"
+   },
+   "name_hash": "354aabc871443a58",
+   "file": {
+    "path": "fx_tex_48347775f9ac64a8.texture",
+    "size": 1625,
+    "crc32": "e4dac9e3"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_63b5bd3fd54c00c2"
+   },
+   "name_hash": "4da98f0306366def",
+   "file": {
+    "path": "fx_tex_63b5bd3fd54c00c2.texture",
+    "size": 186316,
+    "crc32": "eab405e6"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_419d65070721a5d6"
+   },
+   "name_hash": "a8efe758d3b76daf",
+   "file": {
+    "path": "shader_419d65070721a5d6.material",
+    "size": 68,
+    "crc32": "0e9c0553"
+   },
+   "stream": {
+    "name": "data/am/6d95b6c758d9c9f4",
+    "file": {
+     "path": "data/am/6d95b6c758d9c9f4",
+     "size": 16948,
+     "crc32": "1de138e8"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_48347775f9ac64a8"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_63b5bd3fd54c00c2"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_6c8fb6038edb5d45"
+   },
+   "name_hash": "3e201963d3d249c9",
+   "file": {
+    "path": "fx_tex_6c8fb6038edb5d45.texture",
+    "size": 5772,
+    "crc32": "4e4dee2b"
+   },
+   "stream": {
+    "name": "data/am/339c14333c0bcc5a.stream",
+    "file": {
+     "path": "data/am/339c14333c0bcc5a.stream",
+     "size": 13671,
+     "crc32": "8b3f56de"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_ad24d0b6e523c8ea"
+   },
+   "name_hash": "cf53938c707d3f7c",
+   "file": {
+    "path": "shader_ad24d0b6e523c8ea.material",
+    "size": 68,
+    "crc32": "a281bcd6"
+   },
+   "stream": {
+    "name": "data/am/d518f68a87fc03e1",
+    "file": {
+     "path": "data/am/d518f68a87fc03e1",
+     "size": 146564,
+     "crc32": "22045da3"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_6c8fb6038edb5d45"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_8b83f895bc69b828_61ce1d6c"
+   },
+   "name_hash": "2ee4357aa01ec9cf",
+   "file": {
+    "path": "fx_8b83f895bc69b828_61ce1d6c.material",
+    "size": 68,
+    "crc32": "dd06a5c9"
+   },
+   "stream": {
+    "name": "data/am/91fe785617b1f008",
+    "file": {
+     "path": "data/am/91fe785617b1f008",
+     "size": 380,
+     "crc32": "13bf7f14"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_6c8fb6038edb5d45"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_ad24d0b6e523c8ea"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_7f12376aa6765036"
+   },
+   "name_hash": "094b24b2ca2181dd",
+   "file": {
+    "path": "fx_tex_7f12376aa6765036.texture",
+    "size": 17521,
+    "crc32": "2126df04"
+   },
+   "stream": {
+    "name": "data/am/d50e737bdd7e9b1c.stream",
+    "file": {
+     "path": "data/am/d50e737bdd7e9b1c.stream",
+     "size": 42216,
+     "crc32": "2f605f90"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_ca5c70aecb8dce11_bcf26b1e"
+   },
+   "name_hash": "292e1983e5adac20",
+   "file": {
+    "path": "fx_ca5c70aecb8dce11_bcf26b1e.material",
+    "size": 68,
+    "crc32": "99dd7a5d"
+   },
+   "stream": {
+    "name": "data/am/b99ef77f2ac84aa4",
+    "file": {
+     "path": "data/am/b99ef77f2ac84aa4",
+     "size": 112108,
+     "crc32": "3777a66a"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_ca5c70aecb8dce11_bcf26b1e_0b3bc61f"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_7f12376aa6765036"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_909f0d3e2db365e2"
+   },
+   "name_hash": "91a4f8b2f245c4dc",
+   "file": {
+    "path": "fx_tex_909f0d3e2db365e2.texture",
+    "size": 16542,
+    "crc32": "4777f9b4"
+   },
+   "stream": {
+    "name": "data/am/3c40fb4b8ef5f959.stream",
+    "file": {
+     "path": "data/am/3c40fb4b8ef5f959.stream",
+     "size": 224433,
+     "crc32": "266a89d7"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+   },
+   "name_hash": "c0d1b2def6ba3a9a",
+   "file": {
+    "path": "fx_tex_9e71cd21e19b6ba1.texture",
+    "size": 17936,
+    "crc32": "78646d0f"
+   },
+   "stream": {
+    "name": "data/am/9603cd92be23415a.stream",
+    "file": {
+     "path": "data/am/9603cd92be23415a.stream",
+     "size": 45264,
+     "crc32": "91f39ae6"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b274a89be3f5c19e"
+   },
+   "name_hash": "9f8e303420a92012",
+   "file": {
+    "path": "fx_tex_b274a89be3f5c19e.texture",
+    "size": 21577,
+    "crc32": "6986a940"
+   },
+   "stream": {
+    "name": "data/am/62e3871b6e021c3c.stream",
+    "file": {
+     "path": "data/am/62e3871b6e021c3c.stream",
+     "size": 54908,
+     "crc32": "c4ea93ca"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b6d14f6b71cb6710"
+   },
+   "name_hash": "641f40d110f05a79",
+   "file": {
+    "path": "fx_tex_b6d14f6b71cb6710.texture",
+    "size": 1074,
+    "crc32": "83afd9eb"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_bdeca3a33390885e"
+   },
+   "name_hash": "f5bb33b37afee6ef",
+   "file": {
+    "path": "fx_tex_bdeca3a33390885e.texture",
+    "size": 30282,
+    "crc32": "5de0641a"
+   },
+   "stream": {
+    "name": "data/am/a234a4caaa4e9397.stream",
+    "file": {
+     "path": "data/am/a234a4caaa4e9397.stream",
+     "size": 83188,
+     "crc32": "f30549e8"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_c269aec71600f819"
+   },
+   "name_hash": "2bbf7515a9dacc44",
+   "file": {
+    "path": "fx_c269aec71600f819.material",
+    "size": 68,
+    "crc32": "85def6c5"
+   },
+   "stream": {
+    "name": "data/am/8066e27d03bc6018",
+    "file": {
+     "path": "data/am/8066e27d03bc6018",
+     "size": 92756,
+     "crc32": "fc8f9f4c"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_2ff705504ceae6c5"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_b274a89be3f5c19e"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_bdeca3a33390885e"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_ce496ebbc86be85d"
+   },
+   "name_hash": "134fd3f28b3410a2",
+   "file": {
+    "path": "fx_tex_ce496ebbc86be85d.texture",
+    "size": 983,
+    "crc32": "5343b66b"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_dbc78d9223242b59"
+   },
+   "name_hash": "44a85830e8109a9f",
+   "file": {
+    "path": "fx_tex_dbc78d9223242b59.texture",
+    "size": 15210,
+    "crc32": "4c733e75"
+   },
+   "stream": {
+    "name": "data/am/ca0177d4785207fe.stream",
+    "file": {
+     "path": "data/am/ca0177d4785207fe.stream",
+     "size": 146619,
+     "crc32": "183cc37b"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_1a9846562ad58908"
+   },
+   "name_hash": "fce0d7557b46bcd1",
+   "file": {
+    "path": "fx_1a9846562ad58908.material",
+    "size": 68,
+    "crc32": "29bfc8c0"
+   },
+   "stream": {
+    "name": "data/am/6a48f0fc244f8b6e",
+    "file": {
+     "path": "data/am/6a48f0fc244f8b6e",
+     "size": 132716,
+     "crc32": "c7103fe5"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_ce496ebbc86be85d"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_dbc78d9223242b59"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_7f12376aa6765036"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_45a7c6d858a65270"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_909f0d3e2db365e2"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_df10ea5dbc96aed7_e3f5aed6"
+   },
+   "name_hash": "efb4cb10e70c2f75",
+   "file": {
+    "path": "fx_df10ea5dbc96aed7_e3f5aed6.material",
+    "size": 68,
+    "crc32": "340050be"
+   },
+   "stream": {
+    "name": "data/am/dd2be3ee3eb8876b",
+    "file": {
+     "path": "data/am/dd2be3ee3eb8876b",
+     "size": 132916,
+     "crc32": "990f946b"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_df10ea5dbc96aed7_e3f5aed6_c3458c80"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_dbc78d9223242b59"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_7f12376aa6765036"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_45a7c6d858a65270"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_909f0d3e2db365e2"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_df10ea5dbc96aed7"
+   },
+   "name_hash": "8df05f58e4616d99",
+   "file": {
+    "path": "shader_df10ea5dbc96aed7.material",
+    "size": 68,
+    "crc32": "5e813c80"
+   },
+   "stream": {
+    "name": "data/am/d149d14a37c345c5",
+    "file": {
+     "path": "data/am/d149d14a37c345c5",
+     "size": 132916,
+     "crc32": "906e823d"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_015901e1ba958029"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_dbc78d9223242b59"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_7f12376aa6765036"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_45a7c6d858a65270"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_909f0d3e2db365e2"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_2d0cedfca4b32d1b_e3f5aed6"
+   },
+   "name_hash": "bccee06f1ca06f81",
+   "file": {
+    "path": "fx_2d0cedfca4b32d1b_e3f5aed6.material",
+    "size": 68,
+    "crc32": "f43a8d31"
+   },
+   "stream": {
+    "name": "data/am/db526b2c2cdfa812",
+    "file": {
+     "path": "data/am/db526b2c2cdfa812",
+     "size": 264,
+     "crc32": "e79914b6"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_2d0cedfca4b32d1b_e3f5aed6_c3458c80"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_dbc78d9223242b59"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_7f12376aa6765036"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_9e71cd21e19b6ba1"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_45a7c6d858a65270"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_909f0d3e2db365e2"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_df10ea5dbc96aed7"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_f8666b77180cf6f4"
+   },
+   "name_hash": "8b65ae62e850956f",
+   "file": {
+    "path": "fx_tex_f8666b77180cf6f4.texture",
+    "size": 1412,
+    "crc32": "f0b97e9b"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_a1810eaa8dcf1f48"
+   },
+   "name_hash": "c93bfc2df1a4ed3c",
+   "file": {
+    "path": "fx_a1810eaa8dcf1f48.material",
+    "size": 68,
+    "crc32": "c6c47207"
+   },
+   "stream": {
+    "name": "data/am/9cce22d6f148d45f",
+    "file": {
+     "path": "data/am/9cce22d6f148d45f",
+     "size": 248,
+     "crc32": "0fdb40f2"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_f8666b77180cf6f4"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_63b5bd3fd54c00c2"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_419d65070721a5d6"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_fcf0c66bdecb0564"
+   },
+   "name_hash": "a325e3b44ba1dfaa",
+   "file": {
+    "path": "fx_tex_fcf0c66bdecb0564.texture",
+    "size": 12530,
+    "crc32": "ae54038c"
+   },
+   "stream": {
+    "name": "data/am/7688af40559d189b.stream",
+    "file": {
+     "path": "data/am/7688af40559d189b.stream",
+     "size": 26324,
+     "crc32": "db957264"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_0ff8b8d7ff1258fa_11024279"
+   },
+   "name_hash": "6c5c280f6500e7c3",
+   "file": {
+    "path": "fx_0ff8b8d7ff1258fa_11024279.material",
+    "size": 68,
+    "crc32": "f75c7930"
+   },
+   "stream": {
+    "name": "data/am/e45786a7a667c4ce",
+    "file": {
+     "path": "data/am/e45786a7a667c4ce",
+     "size": 488,
+     "crc32": "b1f91a4e"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_fcf0c66bdecb0564"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_e0dbd1199aa92203"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_f0e38c65b6eeb1f0_c9cdcebb"
+   },
+   "name_hash": "aaeb2548c798e278",
+   "file": {
+    "path": "fx_f0e38c65b6eeb1f0_c9cdcebb.material",
+    "size": 68,
+    "crc32": "f9960c4e"
+   },
+   "stream": {
+    "name": "data/am/f6e0ec391a4b9bcf",
+    "file": {
+     "path": "data/am/f6e0ec391a4b9bcf",
+     "size": 476,
+     "crc32": "02361671"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_b6d14f6b71cb6710"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_fcf0c66bdecb0564"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_f828582d7d2822cb"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/psyker_shield_block"
+   },
+   "name_hash": "31d3ce49c02dfec5",
+   "file": {
+    "path": "psyker_shield_block.particles",
+    "size": 1721,
+    "crc32": "115a7d86"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_0ff8b8d7ff1258fa_11024279"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "unit",
+    "name": "content/mods/warp_fx/shared/fx_unit_801081fc7b22b90f"
+   },
+   "name_hash": "767c4a744976d7b4",
+   "file": {
+    "path": "fx_unit_801081fc7b22b90f.unit",
+    "size": 46539,
+    "crc32": "cb83178e"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_1a9846562ad58908"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/protectorate_sphere_shield_fade"
+   },
+   "name_hash": "f49b923ff22c5d69",
+   "file": {
+    "path": "protectorate_sphere_shield_fade.particles",
+    "size": 2410,
+    "crc32": "0828bc3d"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_fd8a24d7fbc56919"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_a1810eaa8dcf1f48"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_f0e38c65b6eeb1f0_c9cdcebb"
+    },
+    {
+     "type": "unit",
+     "name": "content/mods/warp_fx/shared/fx_unit_801081fc7b22b90f"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_df10ea5dbc96aed7_e3f5aed6"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "unit",
+    "name": "content/mods/warp_fx/shared/fx_unit_c83f310bfaf62ebe"
+   },
+   "name_hash": "22d62a223c5cf5ed",
+   "file": {
+    "path": "fx_unit_c83f310bfaf62ebe.unit",
+    "size": 10376,
+    "crc32": "bd2e91d0"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_c269aec71600f819"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/protectorate_sphere_shield_init"
+   },
+   "name_hash": "208be4945fac21f4",
+   "file": {
+    "path": "protectorate_sphere_shield_init.particles",
+    "size": 7147,
+    "crc32": "b2141e90"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_8b83f895bc69b828_61ce1d6c"
+    },
+    {
+     "type": "unit",
+     "name": "content/mods/warp_fx/shared/fx_unit_801081fc7b22b90f"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_2d0cedfca4b32d1b_e3f5aed6"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_fd8a24d7fbc56919"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_a1810eaa8dcf1f48"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_f0e38c65b6eeb1f0_c9cdcebb"
+    },
+    {
+     "type": "unit",
+     "name": "content/mods/warp_fx/shared/fx_unit_c83f310bfaf62ebe"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_ca5c70aecb8dce11_bcf26b1e"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "bones",
+    "name": "content/mods/warp_fx/psyker/shield_hex_bones"
+   },
+   "name_hash": "8667cdff4b36bb38",
+   "file": {
+    "path": "shield_hex_bones.bones",
+    "size": 2210,
+    "crc32": "cb58c0b7"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "animation",
+    "name": "content/mods/warp_fx/psyker/shield_hex_animation_0"
+   },
+   "name_hash": "1b4bf527462a11ea",
+   "file": {
+    "path": "shield_hex_animation_0.animation",
+    "size": 752018,
+    "crc32": "2a51faf8"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "bones",
+     "name": "content/mods/warp_fx/psyker/shield_hex_bones"
+    }
+   ],
+   "animation_fidelity": {
+    "method": "sampled_joint_local",
+    "is_error_bound": false,
+    "status": "sampled",
+    "sample_times": 254,
+    "max_observed_translation_error": 8.92058e-05,
+    "max_observed_scale_error": 0,
+    "max_observed_rotation_error_radians": 0
+   },
+   "animation_fit": {
+    "method": "adaptive_native_hermite",
+    "is_error_bound": false,
+    "status": "measured_conformant",
+    "translation_tolerance": 9.999999747378752e-05,
+    "scale_tolerance": 9.999999747378752e-05,
+    "rotation_tolerance_radians": 0.0010000000474974513,
+    "max_controls_per_track": 10000,
+    "max_refinements_per_track": 4096,
+    "max_evaluations_per_track": 2000000,
+    "tracks": [
+     {
+      "source_node": 0,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.021703644933687e-05,
+      "measured_max_error_time": 2.3016276359558105,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 1,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.864500508290232e-05,
+      "measured_max_error_time": 2.418750047683716,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11560,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 2,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.750183618233057e-05,
+      "measured_max_error_time": 3.5294270515441895,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11681,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 3,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.576550615110144e-05,
+      "measured_max_error_time": 3.261458396911621,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11587,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 4,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.786030979022921e-05,
+      "measured_max_error_time": 3.347916603088379,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 5,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.96973380543927e-05,
+      "measured_max_error_time": 2.328125,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11567,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 6,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.911978602359314e-05,
+      "measured_max_error_time": 3.3954427242279053,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11371,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 7,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.88776388440766e-05,
+      "measured_max_error_time": 3.8385415077209473,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11379,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 8,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.70026908964887e-05,
+      "measured_max_error_time": 4.129426956176758,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11669,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 9,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.99577171148719e-05,
+      "measured_max_error_time": 2.5947916507720947,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11566,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 10,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.692578333154816e-05,
+      "measured_max_error_time": 2.914583444595337,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11452,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 11,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.92752663856529e-05,
+      "measured_max_error_time": 4.028776168823242,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11388,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 12,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.553688402773722e-05,
+      "measured_max_error_time": 3.352083206176758,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11447,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 13,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.75904231039164e-05,
+      "measured_max_error_time": 3.8294270038604736,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11681,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 14,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.97419486219393e-05,
+      "measured_max_error_time": 3.5621092319488525,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11380,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 15,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.02253623055544e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 16,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.019804954528809e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 17,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.02253623055544e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 18,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.021703644933687e-05,
+      "measured_max_error_time": 2.3016276359558105,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 19,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.998505265443577e-05,
+      "measured_max_error_time": 3.1385416984558105,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11370,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 20,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.998505265443577e-05,
+      "measured_max_error_time": 3.1385416984558105,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11370,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 21,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.864500508290232e-05,
+      "measured_max_error_time": 2.418750047683716,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11560,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 22,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.97419486219393e-05,
+      "measured_max_error_time": 3.5621092319488525,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11380,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 23,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.750183618233057e-05,
+      "measured_max_error_time": 3.5294270515441895,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11681,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 24,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.576550615110144e-05,
+      "measured_max_error_time": 3.261458396911621,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11587,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 25,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.864589485679408e-05,
+      "measured_max_error_time": 2.147916793823242,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11564,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 26,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.749939793168371e-05,
+      "measured_max_error_time": 1.0372395515441895,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11688,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 27,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.576495623522983e-05,
+      "measured_max_error_time": 1.3052083253860474,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11603,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 28,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.786030979022921e-05,
+      "measured_max_error_time": 1.21875,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11481,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 29,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.998520395214215e-05,
+      "measured_max_error_time": 1.4281249046325684,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11379,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 30,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.974707606289498e-05,
+      "measured_max_error_time": 1.0045572519302368,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11383,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 31,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.576495623522983e-05,
+      "measured_max_error_time": 1.3052083253860474,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11603,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 32,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.998520395214215e-05,
+      "measured_max_error_time": 1.4281249046325684,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11379,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 33,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.749939793168371e-05,
+      "measured_max_error_time": 1.0372395515441895,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11688,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 34,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.864589485679408e-05,
+      "measured_max_error_time": 2.147916793823242,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11564,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 35,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.968772932327427e-05,
+      "measured_max_error_time": 2.2281250953674316,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11572,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 36,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.99577171148719e-05,
+      "measured_max_error_time": 1.9718750715255737,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11575,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 37,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.553358425950415e-05,
+      "measured_max_error_time": 1.214583396911621,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11457,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 38,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.974707606289498e-05,
+      "measured_max_error_time": 0.9947916865348816,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11383,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 39,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.912197566210898e-05,
+      "measured_max_error_time": 1.1614582538604736,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11382,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 40,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.691469206845398e-05,
+      "measured_max_error_time": 1.6520832777023315,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11462,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 41,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.75904231039164e-05,
+      "measured_max_error_time": 0.7372395992279053,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11692,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 42,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.887982851475783e-05,
+      "measured_max_error_time": 0.7378906607627869,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11387,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 43,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.927619769766322e-05,
+      "measured_max_error_time": 0.528124988079071,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11401,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 44,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.70026908964887e-05,
+      "measured_max_error_time": 0.4281250238418579,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11699,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 45,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.021703644933687e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 46,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.937066184376983e-05,
+      "measured_max_error_time": 2.971874952316284,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11377,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 47,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.996048375265892e-05,
+      "measured_max_error_time": 3.196093797683716,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11566,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 48,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.937017221419065e-05,
+      "measured_max_error_time": 1.5947916507720947,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11376,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 49,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.019804954528809e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 50,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.996048375265892e-05,
+      "measured_max_error_time": 1.3705729246139526,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11573,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 51,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.96973380543927e-05,
+      "measured_max_error_time": 2.328125,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11567,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 52,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.99577171148719e-05,
+      "measured_max_error_time": 2.5947916507720947,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11566,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 53,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.553688402773722e-05,
+      "measured_max_error_time": 3.352083206176758,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11447,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 54,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.97419486219393e-05,
+      "measured_max_error_time": 3.5621092319488525,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11380,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 55,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.911978602359314e-05,
+      "measured_max_error_time": 3.3954427242279053,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11371,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 56,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.692578333154816e-05,
+      "measured_max_error_time": 2.914583444595337,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11452,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 57,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.75904231039164e-05,
+      "measured_max_error_time": 3.8294270038604736,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11681,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 58,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.88776388440766e-05,
+      "measured_max_error_time": 3.8385415077209473,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11379,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 59,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.92752663856529e-05,
+      "measured_max_error_time": 4.028776168823242,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11388,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 60,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.70026908964887e-05,
+      "measured_max_error_time": 4.129426956176758,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11669,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 61,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.829140320129983e-05,
+      "measured_max_error_time": 3.4281251430511475,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11705,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 62,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.502602577209473e-05,
+      "measured_max_error_time": 3.7281250953674316,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11613,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 63,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.829140320129983e-05,
+      "measured_max_error_time": 3.4281251430511475,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11705,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 64,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.786030979022921e-05,
+      "measured_max_error_time": 3.347916603088379,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 65,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.545246732942659e-05,
+      "measured_max_error_time": 3.5145833492279053,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11483,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 66,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.545246732942659e-05,
+      "measured_max_error_time": 3.5145833492279053,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11483,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 67,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.70026908964887e-05,
+      "measured_max_error_time": 4.129426956176758,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11669,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 68,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.786030979022921e-05,
+      "measured_max_error_time": 3.347916603088379,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 69,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.92752663856529e-05,
+      "measured_max_error_time": 4.028776168823242,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11388,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 70,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.75904231039164e-05,
+      "measured_max_error_time": 3.8294270038604736,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11681,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 71,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.553688402773722e-05,
+      "measured_max_error_time": 3.352083206176758,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11447,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 72,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.99577171148719e-05,
+      "measured_max_error_time": 2.5947916507720947,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11566,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 73,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.96973380543927e-05,
+      "measured_max_error_time": 2.328125,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11567,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 74,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.021703644933687e-05,
+      "measured_max_error_time": 2.3016276359558105,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 75,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.937066184376983e-05,
+      "measured_max_error_time": 2.971874952316284,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11377,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 76,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.021703644933687e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 77,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.968772932327427e-05,
+      "measured_max_error_time": 2.2281250953674316,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11572,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 78,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.937017221419065e-05,
+      "measured_max_error_time": 1.5947916507720947,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11376,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 79,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.99577171148719e-05,
+      "measured_max_error_time": 1.9718750715255737,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11575,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 80,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.553358425950415e-05,
+      "measured_max_error_time": 1.214583396911621,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11457,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 81,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.75904231039164e-05,
+      "measured_max_error_time": 0.7372395992279053,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11692,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 82,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.927619769766322e-05,
+      "measured_max_error_time": 0.528124988079071,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11401,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 83,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.70026908964887e-05,
+      "measured_max_error_time": 0.4281250238418579,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11699,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 84,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.786030979022921e-05,
+      "measured_max_error_time": 1.21875,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11481,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 85,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.786030979022921e-05,
+      "measured_max_error_time": 1.21875,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11481,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 86,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.546053247971432e-05,
+      "measured_max_error_time": 1.0520833730697632,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11487,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 87,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.829140320129983e-05,
+      "measured_max_error_time": 1.1294270753860474,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11706,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 88,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.546053247971432e-05,
+      "measured_max_error_time": 1.0520833730697632,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11487,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 89,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.502602577209473e-05,
+      "measured_max_error_time": 0.4281250238418579,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11589,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 90,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.829140320129983e-05,
+      "measured_max_error_time": 1.1294270753860474,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11706,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 91,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.70026908964887e-05,
+      "measured_max_error_time": 0.4281250238418579,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11699,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 92,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.927619769766322e-05,
+      "measured_max_error_time": 0.528124988079071,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11401,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 93,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.75904231039164e-05,
+      "measured_max_error_time": 0.7372395992279053,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11692,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 94,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.974707606289498e-05,
+      "measured_max_error_time": 0.9947916865348816,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11383,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 95,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.887982851475783e-05,
+      "measured_max_error_time": 0.7378906607627869,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11387,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 96,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.691469206845398e-05,
+      "measured_max_error_time": 1.6520832777023315,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11462,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 97,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.553358425950415e-05,
+      "measured_max_error_time": 1.214583396911621,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11457,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 98,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.912197566210898e-05,
+      "measured_max_error_time": 1.1614582538604736,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11382,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 99,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.99577171148719e-05,
+      "measured_max_error_time": 1.9718750715255737,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11575,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 100,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.968772932327427e-05,
+      "measured_max_error_time": 2.2281250953674316,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11572,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 101,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.021703644933687e-05,
+      "measured_max_error_time": 2.3016276359558105,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 102,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.864500508290232e-05,
+      "measured_max_error_time": 2.418750047683716,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11560,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 103,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.750183618233057e-05,
+      "measured_max_error_time": 3.5294270515441895,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11681,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 104,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.576550615110144e-05,
+      "measured_max_error_time": 3.261458396911621,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11587,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 105,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.96973380543927e-05,
+      "measured_max_error_time": 2.328125,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11567,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 106,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.911978602359314e-05,
+      "measured_max_error_time": 3.3954427242279053,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11371,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 107,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.88776388440766e-05,
+      "measured_max_error_time": 3.8385415077209473,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11379,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 108,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.70026908964887e-05,
+      "measured_max_error_time": 4.129426956176758,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11669,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 109,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.99577171148719e-05,
+      "measured_max_error_time": 2.5947916507720947,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11566,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 110,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.692578333154816e-05,
+      "measured_max_error_time": 2.914583444595337,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11452,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 111,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.92752663856529e-05,
+      "measured_max_error_time": 4.028776168823242,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11388,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 112,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.553688402773722e-05,
+      "measured_max_error_time": 3.352083206176758,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11447,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 113,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.75904231039164e-05,
+      "measured_max_error_time": 3.8294270038604736,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11681,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 114,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.02253623055544e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 115,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.019804954528809e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 116,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.02253623055544e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 117,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.998505265443577e-05,
+      "measured_max_error_time": 3.1385416984558105,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11370,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 118,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.998505265443577e-05,
+      "measured_max_error_time": 3.1385416984558105,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11370,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 119,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.864500508290232e-05,
+      "measured_max_error_time": 2.418750047683716,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11560,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 120,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.97419486219393e-05,
+      "measured_max_error_time": 3.5621092319488525,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11380,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 121,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.750183618233057e-05,
+      "measured_max_error_time": 3.5294270515441895,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11681,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 122,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.576550615110144e-05,
+      "measured_max_error_time": 3.261458396911621,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11587,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 123,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.864589485679408e-05,
+      "measured_max_error_time": 2.147916793823242,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11564,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 124,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.749939793168371e-05,
+      "measured_max_error_time": 1.0372395515441895,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11688,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 125,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.576495623522983e-05,
+      "measured_max_error_time": 1.3052083253860474,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11603,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 126,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.998520395214215e-05,
+      "measured_max_error_time": 1.4281249046325684,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11379,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 127,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.974707606289498e-05,
+      "measured_max_error_time": 1.0045572519302368,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11383,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 128,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.576495623522983e-05,
+      "measured_max_error_time": 1.3052083253860474,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11603,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 129,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.998520395214215e-05,
+      "measured_max_error_time": 1.4281249046325684,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11379,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 130,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.749939793168371e-05,
+      "measured_max_error_time": 1.0372395515441895,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11688,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 131,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.864589485679408e-05,
+      "measured_max_error_time": 2.147916793823242,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11564,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 132,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.968772932327427e-05,
+      "measured_max_error_time": 2.2281250953674316,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11572,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 133,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.99577171148719e-05,
+      "measured_max_error_time": 1.9718750715255737,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11575,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 134,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.553358425950415e-05,
+      "measured_max_error_time": 1.214583396911621,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11457,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 135,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.912197566210898e-05,
+      "measured_max_error_time": 1.1614582538604736,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11382,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 136,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.691469206845398e-05,
+      "measured_max_error_time": 1.6520832777023315,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11462,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 137,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.75904231039164e-05,
+      "measured_max_error_time": 0.7372395992279053,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11692,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 138,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.887982851475783e-05,
+      "measured_max_error_time": 0.7378906607627869,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11387,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 139,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.927619769766322e-05,
+      "measured_max_error_time": 0.528124988079071,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11401,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 140,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.70026908964887e-05,
+      "measured_max_error_time": 0.4281250238418579,
+      "controls": 223,
+      "refinements": 57,
+      "evaluations": 11699,
+      "planned_probes": 4016,
+      "evaluated_probes": 4016
+     },
+     {
+      "source_node": 141,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.021703644933687e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 142,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.937066184376983e-05,
+      "measured_max_error_time": 2.971874952316284,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11377,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 143,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.996048375265892e-05,
+      "measured_max_error_time": 3.196093797683716,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11566,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 144,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.937017221419065e-05,
+      "measured_max_error_time": 1.5947916507720947,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11376,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 145,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.019804954528809e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 146,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.996048375265892e-05,
+      "measured_max_error_time": 1.3705729246139526,
+      "controls": 222,
+      "refinements": 56,
+      "evaluations": 11573,
+      "planned_probes": 3998,
+      "evaluated_probes": 3998
+     },
+     {
+      "source_node": 147,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.545246732942659e-05,
+      "measured_max_error_time": 3.5145833492279053,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11483,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 148,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.545246732942659e-05,
+      "measured_max_error_time": 3.5145833492279053,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11483,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 149,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.786030979022921e-05,
+      "measured_max_error_time": 3.347916603088379,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 150,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.911978602359314e-05,
+      "measured_max_error_time": 3.3954427242279053,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11371,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 151,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.692578333154816e-05,
+      "measured_max_error_time": 2.914583444595337,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11452,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 152,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.88776388440766e-05,
+      "measured_max_error_time": 3.8385415077209473,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11379,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 153,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.887982851475783e-05,
+      "measured_max_error_time": 0.7378906607627869,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11387,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 154,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.691469206845398e-05,
+      "measured_max_error_time": 1.6520832777023315,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11462,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 155,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.912197566210898e-05,
+      "measured_max_error_time": 1.1614582538604736,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11382,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 156,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.786030979022921e-05,
+      "measured_max_error_time": 1.21875,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11481,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 157,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.546053247971432e-05,
+      "measured_max_error_time": 1.0520833730697632,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11487,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 158,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.546053247971432e-05,
+      "measured_max_error_time": 1.0520833730697632,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11487,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 159,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.937066184376983e-05,
+      "measured_max_error_time": 2.971874952316284,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11377,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     },
+     {
+      "source_node": 160,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.021703644933687e-05,
+      "measured_max_error_time": 2.2650389671325684,
+      "controls": 221,
+      "refinements": 55,
+      "evaluations": 11464,
+      "planned_probes": 3980,
+      "evaluated_probes": 3980
+     },
+     {
+      "source_node": 161,
+      "path": "translation",
+      "status": "conformant",
+      "conformant": true,
+      "best_effort": false,
+      "tolerance": 9.999999747378752e-05,
+      "measurement_available": true,
+      "measured_max_error": 8.937017221419065e-05,
+      "measured_max_error_time": 1.5947916507720947,
+      "controls": 220,
+      "refinements": 54,
+      "evaluations": 11376,
+      "planned_probes": 3962,
+      "evaluated_probes": 3962
+     }
+    ]
+   }
+  },
+  {
+   "key": {
+    "type": "state_machine",
+    "name": "content/mods/warp_fx/psyker/shield_hex"
+   },
+   "name_hash": "6befd07015fa412e",
+   "file": {
+    "path": "shield_hex.state_machine",
+    "size": 267,
+    "crc32": "e60cada7"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "animation",
+     "name": "content/mods/warp_fx/psyker/shield_hex_animation_0"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0_base_color"
+   },
+   "name_hash": "83eb4d62b7fec2be",
+   "file": {
+    "path": "shield_hex_material_0_base_color.texture",
+    "size": 798,
+    "crc32": "84fd40c0"
+   },
+   "stream": {
+    "name": "data/am/ca5ca49c435df8f2.stream",
+    "file": {
+     "path": "data/am/ca5ca49c435df8f2.stream",
+     "size": 1742,
+     "crc32": "ea8b4c9d"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0_emissive"
+   },
+   "name_hash": "0188c1fbb9886a1e",
+   "file": {
+    "path": "shield_hex_material_0_emissive.texture",
+    "size": 1033,
+    "crc32": "217d0321"
+   },
+   "stream": {
+    "name": "data/am/afebe02b6cc279e7.stream",
+    "file": {
+     "path": "data/am/afebe02b6cc279e7.stream",
+     "size": 1114,
+     "crc32": "1cea279f"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0_normal"
+   },
+   "name_hash": "98fb9aa43f6db495",
+   "file": {
+    "path": "shield_hex_material_0_normal.texture",
+    "size": 357,
+    "crc32": "f3a72582"
+   },
+   "stream": {
+    "name": "data/am/9eae512cbb0b2b1d.stream",
+    "file": {
+     "path": "data/am/9eae512cbb0b2b1d.stream",
+     "size": 215,
+     "crc32": "765b2340"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_0"
+   },
+   "name_hash": "52c2105a4b3a99ad",
+   "file": {
+    "path": "shield_hex_material_0.material",
+    "size": 68,
+    "crc32": "159775ed"
+   },
+   "stream": {
+    "name": "data/am/605e83775a455307",
+    "file": {
+     "path": "data/am/605e83775a455307",
+     "size": 136760,
+     "crc32": "407c2e2b"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_0_base_color"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_0_emissive"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_0_normal"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_0_normal"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_0_normal"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_0_normal"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_0_normal"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1_base_color"
+   },
+   "name_hash": "a5a88c9caebab3d3",
+   "file": {
+    "path": "shield_hex_material_1_base_color.texture",
+    "size": 798,
+    "crc32": "03ba273a"
+   },
+   "stream": {
+    "name": "data/am/e72c96a7269778ea.stream",
+    "file": {
+     "path": "data/am/e72c96a7269778ea.stream",
+     "size": 1742,
+     "crc32": "ea8b4c9d"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1_emissive"
+   },
+   "name_hash": "825a87a17d4c3ea8",
+   "file": {
+    "path": "shield_hex_material_1_emissive.texture",
+    "size": 1033,
+    "crc32": "397bd1a4"
+   },
+   "stream": {
+    "name": "data/am/6337cde755066560.stream",
+    "file": {
+     "path": "data/am/6337cde755066560.stream",
+     "size": 1114,
+     "crc32": "1cea279f"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1_normal"
+   },
+   "name_hash": "bd556f93a886e9eb",
+   "file": {
+    "path": "shield_hex_material_1_normal.texture",
+    "size": 357,
+    "crc32": "ad6177ef"
+   },
+   "stream": {
+    "name": "data/am/85a266499da2d77c.stream",
+    "file": {
+     "path": "data/am/85a266499da2d77c.stream",
+     "size": 215,
+     "crc32": "765b2340"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/psyker/shield_hex_material_1"
+   },
+   "name_hash": "041e6e02342c6466",
+   "file": {
+    "path": "shield_hex_material_1.material",
+    "size": 68,
+    "crc32": "9c5ea69e"
+   },
+   "stream": {
+    "name": "data/am/cd9a58ade3dd3d77",
+    "file": {
+     "path": "data/am/cd9a58ade3dd3d77",
+     "size": 136760,
+     "crc32": "3723088a"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_1_base_color"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_1_emissive"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_1_normal"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_1_normal"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_1_normal"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_1_normal"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_1_normal"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "unit",
+    "name": "content/mods/warp_fx/psyker/shield_hex"
+   },
+   "name_hash": "6befd07015fa412e",
+   "file": {
+    "path": "shield_hex.unit",
+    "size": 474589,
+    "crc32": "c7ff75ec"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "bones",
+     "name": "content/mods/warp_fx/psyker/shield_hex_bones"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_0"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/psyker/shield_hex_material_1"
+    },
+    {
+     "type": "state_machine",
+     "name": "content/mods/warp_fx/psyker/shield_hex"
+    }
+   ]
+  }
+ ],
+ "external_resources": []
+}

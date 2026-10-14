@@ -1,0 +1,17 @@
+{
+  "schema_version": 2,
+  "rows_per_chunk": 4096,
+  "source_database": "resource_catalog.sqlite3",
+  "index": "scripts/mods/ResourceLoader/catalog/index.lua",
+  "type_count": 35,
+  "chunk_count": 100,
+  "selected_package_count": 13610,
+  "chunk_package_entries": 38267,
+  "source_membership_count": 905475,
+  "hash_names": 67398,
+  "exact_packages": 15960,
+  "named": 226102,
+  "resources": 293500,
+  "loadable": 289130,
+  "no_package": 4370
+}

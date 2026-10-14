@@ -1,0 +1,12 @@
+{
+    "name": "Warp Effects",
+    "author": "fviuff",
+    "version": "1.2.0",
+    "description": "New psyker effects",
+    "order": {
+        "require": ["CustomAssets"],
+        "this_before": [],
+        "this_after": ["CustomAssets"]
+    },
+    "localization": {}
+}

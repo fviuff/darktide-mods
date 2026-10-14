@@ -1,0 +1,12 @@
+{
+    "name": "ZOOM",
+    "author": "fviuff",
+    "version": "2.0.0",
+    "description": "ZOOM in and out like optifine",
+    "order": {
+        "require": [],
+        "this_before": [],
+        "this_after": []
+    },
+    "localization": {}
+}

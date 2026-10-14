@@ -1,0 +1,12 @@
+{
+    "name": "Riftlance",
+    "author": "fviuff",
+    "version": "1.0.0",
+    "description": "Type /riftlance to turn the electrokinetic staffs charge into a rift lance: hold the beam on a target, left click to flare it and tear rifts open around it",
+    "order": {
+        "require": ["CustomAssets"],
+        "this_before": [],
+        "this_after": ["CustomAssets"]
+    },
+    "localization": {}
+}

@@ -1,0 +1,520 @@
+{
+ "schema": 1,
+ "compiler": {
+  "name": "DarktideGLBCompiler",
+  "version": "0.3.0-beta"
+ },
+ "target": {
+  "id": "darktide",
+  "name": "Warhammer 40,000: Darktide",
+  "unit_version": 115,
+  "material_version": 61
+ },
+ "roots": [
+  {
+   "type": "particles",
+   "name": "content/mods/warp_fx/psyker/buff_warpfire"
+  }
+ ],
+ "artifacts": [
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_c509a3325ebb3385"
+   },
+   "role": "primary",
+   "path": "shader_c509a3325ebb3385.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_c509a3325ebb3385"
+   },
+   "role": "stream",
+   "path": "data/am/47ee088c04d8e0b5",
+   "size": 12564
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_f808c5ae33bb7142"
+   },
+   "role": "primary",
+   "path": "fx_f808c5ae33bb7142.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_f808c5ae33bb7142"
+   },
+   "role": "stream",
+   "path": "data/am/b033588d46f3c962",
+   "size": 84
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_612e95b62b8e2aeb_0f31f016_a9e8948a"
+   },
+   "role": "primary",
+   "path": "fx_612e95b62b8e2aeb_0f31f016_a9e8948a.texture",
+   "size": 892
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_6c6840b9ae0cdde5"
+   },
+   "role": "primary",
+   "path": "fx_tex_6c6840b9ae0cdde5.texture",
+   "size": 1481
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_968a414a4b33bb16"
+   },
+   "role": "primary",
+   "path": "fx_tex_968a414a4b33bb16.texture",
+   "size": 908
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_7a878519994efa78"
+   },
+   "role": "primary",
+   "path": "shader_7a878519994efa78.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_7a878519994efa78"
+   },
+   "role": "stream",
+   "path": "data/am/0ec9248662d2bbcc",
+   "size": 15620
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_a800bd7c2f4d1e0f"
+   },
+   "role": "primary",
+   "path": "fx_tex_a800bd7c2f4d1e0f.texture",
+   "size": 1481
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b1bce1dd6801908d"
+   },
+   "role": "primary",
+   "path": "fx_tex_b1bce1dd6801908d.texture",
+   "size": 661
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_fb12a35c027c8f43"
+   },
+   "role": "primary",
+   "path": "fx_fb12a35c027c8f43.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_fb12a35c027c8f43"
+   },
+   "role": "stream",
+   "path": "data/am/d97e6b66f0b40401",
+   "size": 152
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_dcf2e7be7b14f5e1"
+   },
+   "role": "primary",
+   "path": "fx_tex_dcf2e7be7b14f5e1.texture",
+   "size": 18172
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_dcf2e7be7b14f5e1"
+   },
+   "role": "stream",
+   "path": "data/am/f1dc6631f99fadda.stream",
+   "size": 4097014
+  },
+  {
+   "resource": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_e54ddf47ca8d4c43"
+   },
+   "role": "primary",
+   "path": "fx_tex_e54ddf47ca8d4c43.texture",
+   "size": 924
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_4ab784b71d6e9eb6"
+   },
+   "role": "primary",
+   "path": "shader_4ab784b71d6e9eb6.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_4ab784b71d6e9eb6"
+   },
+   "role": "stream",
+   "path": "data/am/f9b115e178f40815",
+   "size": 394749
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_612e95b62b8e2aeb_0f31f016"
+   },
+   "role": "primary",
+   "path": "fx_612e95b62b8e2aeb_0f31f016.material",
+   "size": 68
+  },
+  {
+   "resource": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_612e95b62b8e2aeb_0f31f016"
+   },
+   "role": "stream",
+   "path": "data/am/0289d06fcfc7b247",
+   "size": 244
+  },
+  {
+   "resource": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/buff_warpfire"
+   },
+   "role": "primary",
+   "path": "buff_warpfire.particles",
+   "size": 935
+  }
+ ],
+ "resources": [
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_c509a3325ebb3385"
+   },
+   "name_hash": "c5b9016ce769817a",
+   "file": {
+    "path": "shader_c509a3325ebb3385.material",
+    "size": 68,
+    "crc32": "7e50eb31"
+   },
+   "stream": {
+    "name": "data/am/47ee088c04d8e0b5",
+    "file": {
+     "path": "data/am/47ee088c04d8e0b5",
+     "size": 12564,
+     "crc32": "5650257d"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_f808c5ae33bb7142"
+   },
+   "name_hash": "6bfd688d22f553c0",
+   "file": {
+    "path": "fx_f808c5ae33bb7142.material",
+    "size": 68,
+    "crc32": "d9b08f8c"
+   },
+   "stream": {
+    "name": "data/am/b033588d46f3c962",
+    "file": {
+     "path": "data/am/b033588d46f3c962",
+     "size": 84,
+     "crc32": "aef37a71"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_c509a3325ebb3385"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_612e95b62b8e2aeb_0f31f016_a9e8948a"
+   },
+   "name_hash": "5a9b23c0d7f66eb1",
+   "file": {
+    "path": "fx_612e95b62b8e2aeb_0f31f016_a9e8948a.texture",
+    "size": 892,
+    "crc32": "f78f0861"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_6c6840b9ae0cdde5"
+   },
+   "name_hash": "ce1c8c1d4198b8fd",
+   "file": {
+    "path": "fx_tex_6c6840b9ae0cdde5.texture",
+    "size": 1481,
+    "crc32": "2e891123"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_968a414a4b33bb16"
+   },
+   "name_hash": "44ebfff5d003471a",
+   "file": {
+    "path": "fx_tex_968a414a4b33bb16.texture",
+    "size": 908,
+    "crc32": "b5668385"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_7a878519994efa78"
+   },
+   "name_hash": "6ebb80b646140590",
+   "file": {
+    "path": "shader_7a878519994efa78.material",
+    "size": 68,
+    "crc32": "17580772"
+   },
+   "stream": {
+    "name": "data/am/0ec9248662d2bbcc",
+    "file": {
+     "path": "data/am/0ec9248662d2bbcc",
+     "size": 15620,
+     "crc32": "5b4d7ec3"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_968a414a4b33bb16"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_a800bd7c2f4d1e0f"
+   },
+   "name_hash": "fd97e24c80814ab5",
+   "file": {
+    "path": "fx_tex_a800bd7c2f4d1e0f.texture",
+    "size": 1481,
+    "crc32": "2f6fa7f4"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_b1bce1dd6801908d"
+   },
+   "name_hash": "73c9556800a5d24a",
+   "file": {
+    "path": "fx_tex_b1bce1dd6801908d.texture",
+    "size": 661,
+    "crc32": "21ae2d21"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_fb12a35c027c8f43"
+   },
+   "name_hash": "be64241098648219",
+   "file": {
+    "path": "fx_fb12a35c027c8f43.material",
+    "size": 68,
+    "crc32": "df42b737"
+   },
+   "stream": {
+    "name": "data/am/d97e6b66f0b40401",
+    "file": {
+     "path": "data/am/d97e6b66f0b40401",
+     "size": 152,
+     "crc32": "3a976585"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_b1bce1dd6801908d"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_7a878519994efa78"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_dcf2e7be7b14f5e1"
+   },
+   "name_hash": "a97b2d167e854ff6",
+   "file": {
+    "path": "fx_tex_dcf2e7be7b14f5e1.texture",
+    "size": 18172,
+    "crc32": "dda53f8d"
+   },
+   "stream": {
+    "name": "data/am/f1dc6631f99fadda.stream",
+    "file": {
+     "path": "data/am/f1dc6631f99fadda.stream",
+     "size": 4097014,
+     "crc32": "ddc36bf9"
+    }
+   },
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "texture",
+    "name": "content/mods/warp_fx/shared/fx_tex_e54ddf47ca8d4c43"
+   },
+   "name_hash": "f8aea4772223a376",
+   "file": {
+    "path": "fx_tex_e54ddf47ca8d4c43.texture",
+    "size": 924,
+    "crc32": "d007a59c"
+   },
+   "stream": null,
+   "dependencies": []
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/shader_4ab784b71d6e9eb6"
+   },
+   "name_hash": "2a37f54b43b44318",
+   "file": {
+    "path": "shader_4ab784b71d6e9eb6.material",
+    "size": 68,
+    "crc32": "631286f0"
+   },
+   "stream": {
+    "name": "data/am/f9b115e178f40815",
+    "file": {
+     "path": "data/am/f9b115e178f40815",
+     "size": 394749,
+     "crc32": "765b300d"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_a800bd7c2f4d1e0f"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_e54ddf47ca8d4c43"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_dcf2e7be7b14f5e1"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "material",
+    "name": "content/mods/warp_fx/shared/fx_612e95b62b8e2aeb_0f31f016"
+   },
+   "name_hash": "90ca03af99153e56",
+   "file": {
+    "path": "fx_612e95b62b8e2aeb_0f31f016.material",
+    "size": 68,
+    "crc32": "f9bf7b95"
+   },
+   "stream": {
+    "name": "data/am/0289d06fcfc7b247",
+    "file": {
+     "path": "data/am/0289d06fcfc7b247",
+     "size": 244,
+     "crc32": "73e1eff3"
+    }
+   },
+   "dependencies": [
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_6c6840b9ae0cdde5"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_612e95b62b8e2aeb_0f31f016_a9e8948a"
+    },
+    {
+     "type": "texture",
+     "name": "content/mods/warp_fx/shared/fx_tex_dcf2e7be7b14f5e1"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/shader_4ab784b71d6e9eb6"
+    }
+   ]
+  },
+  {
+   "key": {
+    "type": "particles",
+    "name": "content/mods/warp_fx/psyker/buff_warpfire"
+   },
+   "name_hash": "bc19d7d7bed896e5",
+   "file": {
+    "path": "buff_warpfire.particles",
+    "size": 935,
+    "crc32": "ad22cbdf"
+   },
+   "stream": null,
+   "dependencies": [
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_f808c5ae33bb7142"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_fb12a35c027c8f43"
+    },
+    {
+     "type": "material",
+     "name": "content/mods/warp_fx/shared/fx_612e95b62b8e2aeb_0f31f016"
+    }
+   ]
+  }
+ ],
+ "external_resources": []
+}
