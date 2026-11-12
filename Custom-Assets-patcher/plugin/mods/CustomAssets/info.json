@@ -1,7 +1,7 @@
 {
     "name": "CustomAssets",
     "author": "fviuff",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "description": "Loads custom assets for other mods",
     "order": {
         "require": [],

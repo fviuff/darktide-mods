@@ -18,7 +18,7 @@ void warn(const std::string &message) { if (warnings_sink) warnings_sink->push_b
 const std::vector<std::string> KNOWN_ENGINE_TYPES = {
     "animation", "animation_curves", "bik", "bk2", "blend_set", "bones", "chroma", "common_package",
     "config", "data", "entity", "flow", "font", "ies", "ini", "ivf", "keys", "level", "lua", "material",
-    "mod", "mouse_cursor", "navdata", "network_config", "oodle_net", "package", "particles", "physics_properties",
+    "mod", "mouse_cursor", "NavData", "network_config", "oodle_net", "package", "particles", "physics_properties",
     "render_config", "rt_pipeline", "scene", "shader", "shader_library", "shader_library_group", "shading_environment",
     "shading_environment_mapping", "slug", "slug_album", "state_machine", "strings", "texture", "theme", "tome", "unit",
     "vector_field", "wwise_bank", "wwise_dep", "wwise_event", "wwise_metadata", "wwise_stream",
