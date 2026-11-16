@@ -166,6 +166,15 @@ function LoadoutPresets.new(dependencies)
         end
 
         mod:set(STORAGE_KEY, serialized, false)
+
+        -- DMF only writes settings on a game state change, so a crash before that loses the pin
+        local get_mod = rawget(_G, "get_mod")
+        local dmf = type(get_mod) == "function" and get_mod("DMF")
+        local save = dmf and dmf.save_unsaved_settings_to_file
+
+        if type(save) == "function" then
+            pcall(save)
+        end
     end
 
     local function character_data(character_id)
@@ -712,6 +721,11 @@ function LoadoutPresets.new(dependencies)
             service.seen_loadout_id = loadout_id
             schedule(character_id, loadout_id, APPLY_DELAY, true)
             rebuild_inventory_views()
+
+            -- A look that stays on shows a copied loadout, so respawn it over the new build's items
+            if not service.pending and active_look_belongs_to(character_id) then
+                request_inventory_refresh(character_id)
+            end
         end
 
         request_context_checks()
@@ -1224,9 +1238,8 @@ function LoadoutPresets.new(dependencies)
         state.refresh_character_id = nil
 
         local presentation_profile = view._presentation_profile
-        local profile_ok, current_profile = call_method(view._preview_player, "profile")
-        local source_profile = profile_ok and type(current_profile) == "table" and current_profile
-            or presentation_profile.npclook_source_profile or presentation_profile
+        -- The view edits this profile in place; the player's own profile only changes on exit
+        local source_profile = presentation_profile.npclook_source_profile or presentation_profile
         local ok, err = pcall(view._spawn_profile, view, source_profile)
 
         if not ok then

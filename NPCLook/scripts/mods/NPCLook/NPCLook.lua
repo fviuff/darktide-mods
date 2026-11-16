@@ -2548,11 +2548,15 @@ function prediction.release_record(handler, record)
                     break
                 end
             end
+
+            -- The game pops the newest id of a shared package, which can be this record's
+            if not found_index and #loaded_packages > 0 then
+                found_index = #loaded_packages
+            end
         end
 
         if found_index then
-            table.remove(loaded_packages, found_index)
-            pcall(package_manager.release, package_manager, package.load_id)
+            pcall(package_manager.release, package_manager, table.remove(loaded_packages, found_index))
 
             if table.is_empty(loaded_packages) then
                 loaded_by_package[package.package_name] = nil
@@ -2629,7 +2633,7 @@ hook_method(MispredictPackageHandler, "_unload_item_packages", function(func, se
 
     local marker = prediction.take(prediction.direct_unloads, self, item)
 
-    if marker then
+    if marker and marker.record then
         prediction.release_record(self, marker.record)
         return
     end
@@ -3218,6 +3222,35 @@ local function acquire_live_item_packages(ext, slot_name, item, visual_signature
     _pending_live_package_loads[slot_name] = record
 
     return nil, loc("error_live_package_not_ready", tostring(record.waiting_package)), true
+end
+
+-- Load callbacks arrive a frame late even for packages the game already has; a native item's
+-- record is usable as soon as every package is in memory
+live_visual.acquire_native_item_packages = function(ext, slot_name, item, visual_signature)
+    local record, package_error, packages_loading = acquire_live_item_packages(ext, slot_name, item, visual_signature)
+
+    if record or not packages_loading then
+        return record, package_error, packages_loading
+    end
+
+    local pending_record = _pending_live_package_loads[slot_name]
+    local package_manager = pending_record and pending_record.package_manager
+    local has_loaded = package_manager and package_manager.has_loaded
+
+    if type(has_loaded) ~= "function" or pending_record.item_name ~= (item and item.name)
+        or type(pending_record.load_ids) ~= "table" then
+        return nil, package_error, true
+    end
+
+    for i = 1, #pending_record.package_names do
+        if not has_loaded(package_manager, pending_record.package_names[i]) then
+            return nil, package_error, true
+        end
+    end
+
+    _pending_live_package_loads[slot_name] = nil
+
+    return pending_record
 end
 
 live_visual.capture_slot_units = function(slot)
@@ -4253,22 +4286,14 @@ live_visual.swap_slot = function(ext, slot_name, item, visual_signature, fixed_f
         return false, false, loc("error_item_nil")
     end
 
-    local package_record
     local previous_package_record = _live_package_loads[slot_name]
 
-    if generated then
-        local package_error
-        local packages_loading
-        package_record, package_error, packages_loading = acquire_live_item_packages(
-            ext,
-            slot_name,
-            item,
-            visual_signature
-        )
+    -- The player's own items load here too; the game does not always still hold their packages
+    local acquire = generated and acquire_live_item_packages or live_visual.acquire_native_item_packages
+    local package_record, package_error, packages_loading = acquire(ext, slot_name, item, visual_signature)
 
-        if not package_record then
-            return false, false, package_error, packages_loading
-        end
+    if not package_record then
+        return false, false, package_error, packages_loading
     end
 
     local unequip_ok, unequip_error = unequip_slot(ext, slot_name, fixed_frame)
@@ -4905,6 +4930,38 @@ local function restore_slots(player, requested_slots)
         return false
     end
 
+    local package_records = {}
+    local packages_ready = true
+
+    -- Load the original items' packages first; the game does not always still hold them
+    for slot_name in pairs(requested_slots) do
+        local original_item = _originals[slot_name]
+
+        if type(original_item) == "table" and original_item.npclook_generated ~= true then
+            local record = live_visual.acquire_native_item_packages(
+                ext,
+                slot_name,
+                original_item,
+                live_visual.item_signature(original_item)
+            )
+
+            if record then
+                package_records[slot_name] = record
+            else
+                packages_ready = false
+            end
+        end
+    end
+
+    if not packages_ready then
+        -- Loaded records wait in the pending list for the next attempt
+        for slot_name, record in pairs(package_records) do
+            _pending_live_package_loads[slot_name] = record
+        end
+
+        return false
+    end
+
     local fixed_frame, fixed_t = fixed_frame_values(ext)
     local removed = {}
     local restored = true
@@ -4933,6 +4990,11 @@ local function restore_slots(player, requested_slots)
         if removed[slot_name] and original_item and original_item ~= false then
             restored = equip_slot(ext, slot_name, original_item, fixed_t) and restored
         end
+    end
+
+    -- The equipped items hold their own package references from here on
+    for _, record in pairs(package_records) do
+        queue_live_package_release(record)
     end
 
     if restored then

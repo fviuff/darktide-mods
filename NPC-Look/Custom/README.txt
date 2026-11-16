@@ -1,1 +1,0 @@
-HIGHLY UNSTABLE, VERY MUCH EXPERIMENTAL. Run CUSTOM_ASSETS_PATCH.bat after putting assets in Custom/<asset>/
