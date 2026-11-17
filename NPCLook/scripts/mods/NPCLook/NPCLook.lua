@@ -8,16 +8,10 @@ local previous_raw_unit_shutdown = type(rawget(mod, "npclook_raw_units_runtime")
     or rawget(mod, "npclook_raw_units_release_autoload")
 
 if previous_extra_slot_runtime then
-    local begin_shutdown = previous_extra_slot_runtime.begin_shutdown
     local shutdown = previous_extra_slot_runtime.shutdown
-        or previous_extra_slot_runtime.release_all
 
     if previous_extra_slot_runtime.ownership_schema == EXTRA_RUNTIME_OWNERSHIP_SCHEMA
         and type(shutdown) == "function" then
-        if type(begin_shutdown) == "function" then
-            pcall(begin_shutdown)
-        end
-
         pcall(shutdown)
     else
         mod:warning("Older visual ownership state was found. Unsafe hot-reload cleanup was skipped; restart Darktide to clear it.")
@@ -47,6 +41,7 @@ rawset(mod, "npclook_raw_unit_registry", nil)
 rawset(mod, "npclook_raw_overlay_fallbacks", nil)
 rawset(mod, "npclook_raw_unit_state", nil)
 rawset(mod, "npclook_meshes_runtime", nil)
+rawset(mod, "npclook_extra_package_cache", nil)
 
 local INSTANCE_GENERATION = (tonumber(rawget(mod, "npclook_instance_generation")) or 0) + 1
 rawset(mod, "npclook_instance_generation", INSTANCE_GENERATION)
@@ -73,12 +68,9 @@ end
 local MasterItems = require("scripts/backend/master_items")
 local PlayerUnitVisualLoadoutExtension = require("scripts/extension_systems/visual_loadout/player_unit_visual_loadout_extension")
 local EquipmentComponent = require("scripts/extension_systems/visual_loadout/equipment_component")
-local MispredictPackageHandler = require("scripts/extension_systems/visual_loadout/mispredict_package_handler")
-local ItemPackage = require("scripts/foundation/managers/package/utilities/item_package")
 local HumanGameplay = require("scripts/managers/player/player_game_states/human_gameplay")
 local PlayerCharacterConstants = require("scripts/settings/player_character/player_character_constants")
 local ItemSlotSettings = require("scripts/settings/item/item_slot_settings")
-local FixedFrame = require("scripts/utilities/fixed_frame")
 local UIUnitSpawner = require("scripts/managers/ui/ui_unit_spawner")
 local UnitSpawnerManager = require("scripts/foundation/managers/unit_spawner/unit_spawner_manager")
 
@@ -123,6 +115,12 @@ local _look_state = {
     meshes = {},
 }
 
+local PACKAGES = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_packages")
+local OVERLAY = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_overlay")
+
+-- Look pieces left over from before a mod reload
+OVERLAY.clear_all(true)
+
 local EXTRA_SLOTS = {}
 EXTRA_SLOTS.visual_loadout_customization = require("scripts/extension_systems/visual_loadout/utilities/visual_loadout_customization")
 EXTRA_SLOTS.profile_utils = require("scripts/utilities/profile_utils")
@@ -133,29 +131,11 @@ local _master_items_cache_version
 local _studio_item_catalog
 local _bound_player_unit
 local _reapply_pending = false
-local _vanilla_restore_pending = false
 local _reapply_retry = util.new_retry(0.1, 1, 1.6)
 local _runtime_reports = {}
 local _game_state_ready = gameplay_time_manager() ~= nil
-local _live_profile_sync_waiting = false
-local _live_package_loads = {}
-local _pending_live_package_loads = {}
-local _retired_live_package_loads = {}
-local _live_package_counter = 0
-local _live_package_gameplay_t
-local _retained_live_raw_package_cache = {
-    package_manager = nil,
-    entries = {},
-}
 local _binding_poll_elapsed = 0
-local _startup_cleanup_pending = true
-local _startup_cleanup_elapsed = 0
-local _startup_cleanup_attempts = 0
-local STARTUP_CLEANUP_MAX_ATTEMPTS = 120
 local BINDING_POLL_INTERVAL = 0.25
--- Generated units are tracked at equip time; this slower sweep only catches late native respawns.
-local PACKAGE_UNIT_REFRESH_INTERVAL = 2
-local _package_unit_refresh_elapsed = 0
 
 local function hook_method(target, method_name, callback)
     local method = target and target[method_name]
@@ -452,14 +432,9 @@ local OUTFIT_PRESETS = {
     },
 }
 
-local _originals = {}
-local live_visual = {
-    managed_slots = {},
-}
+local live_visual = {}
 
--- The local player owns the module tables above. Companion mods dress other player
--- units (Pilgrimage bots) through owner records, so their packages, originals and
--- plans never mix with the local look.
+-- Bots (Pilgrimage) get their own look and plan
 live_visual.owners = {
     by_player = {},
     by_unit = {},
@@ -467,10 +442,6 @@ live_visual.owners = {
     poll_elapsed = 0,
     local_record = {
         state = _look_state,
-        originals = _originals,
-        package_loads = _live_package_loads,
-        pending_package_loads = _pending_live_package_loads,
-        managed_slots = live_visual.managed_slots,
     },
 }
 live_visual.owners.current = live_visual.owners.local_record
@@ -867,17 +838,6 @@ local function item_pref_score(name)
     return score
 end
 
-local function fixed_frame_values(ext)
-    local fixed_t = tonumber(FixedFrame.get_latest_fixed_time()) or 0
-    local step = ext and ext._fixed_time_step
-
-    if not step or step <= 0 then
-        step = 1 / 60
-    end
-
-    return math.floor(fixed_t / step), fixed_t
-end
-
 -- Generated items
 
 -- Darktide: scripts/backend/master_items.lua
@@ -887,10 +847,6 @@ local GENERATED_ITEM_EMPTY_TABLE_FIELDS = {
 }
 
 local GENERATED_ITEM_EMPTY_STRING_FIELDS = {}
-
-local GENERATED_ITEM_FALSE_FIELDS = {
-    "stabilize_neck",
-}
 
 local GENERATED_ITEM_ATTACHMENT_DEPTH_LIMIT = 24
 
@@ -921,10 +877,6 @@ local function configure_generated_item(item, slot_name, item_definitions, clone
 
     for i = 1, #GENERATED_ITEM_EMPTY_STRING_FIELDS do
         item[GENERATED_ITEM_EMPTY_STRING_FIELDS[i]] = ""
-    end
-
-    for i = 1, #GENERATED_ITEM_FALSE_FIELDS do
-        item[GENERATED_ITEM_FALSE_FIELDS[i]] = false
     end
 
     MASKS.configure_item(item, mask_state, slot_name ~= nil)
@@ -1032,29 +984,6 @@ clone_attachment_tree = function(tree, item_definitions, cloned_items, depth, ma
     end
 
     return clone
-end
-
-local function item_package_dependencies(item, item_definitions, mission)
-    local dependencies = {}
-    local ok, err = pcall(
-        ItemPackage.compile_item_instance_dependencies,
-        item,
-        item_definitions,
-        dependencies,
-        mission
-    )
-
-    if not ok then
-        return nil, err
-    end
-
-    for package_name in pairs(dependencies) do
-        if type(package_name) ~= "string" or package_name == "" then
-            return nil, string.format("%s has an empty package reference", tostring(item and item.name or "item"))
-        end
-    end
-
-    return dependencies
 end
 
 local GENERATED_VISUAL_OVERRIDE_FIELDS = {
@@ -1238,7 +1167,7 @@ local function make_item_instance(slot_name, item_name, material_overrides, vari
         item.npclook_material_signature = table.concat(custom_materials, "\31")
     end
 
-    local _, dependency_error = item_package_dependencies(item, cache, nil)
+    local _, dependency_error = PACKAGES.item_dependencies(item, cache, nil)
 
     if dependency_error then
         mod:error("Could not resolve generated item package dependencies: %s", tostring(dependency_error))
@@ -1366,19 +1295,6 @@ local function schedule_reapply()
 end
 
 mod.npclook_schedule_reapply = schedule_reapply
-
--- Generated items use the mod-managed package path.
-
--- Darktide: scripts/extension_systems/visual_loadout/equipment_component.lua
-hook_method(EquipmentComponent, "_slot_is_loaded", function(func, self, slot)
-    local item = slot and slot.item
-
-    if item and item.npclook_generated == true then
-        return true
-    end
-
-    return func(self, slot)
-end)
 
 -- Dependent visual slots can be nested below their top-level owner.
 -- Darktide: scripts/utilities/profile_utils.lua
@@ -1594,6 +1510,16 @@ local function apply_generated_visual_state(source_item, visual_item)
         local field = GENERATED_VISUAL_STATE_FIELDS[i]
 
         rawset(visual_item, field, generated_visual_value(source_item[field]))
+    end
+
+    -- The game raises a root piece's neck lock to the highest of its attached pieces (a collar), keep that
+    local own_neck = tonumber(source_item.stabilize_neck)
+    local combined_neck = tonumber(visual_item.gear and visual_item.gear.masterDataInstance
+        and visual_item.gear.masterDataInstance.overrides
+        and visual_item.gear.masterDataInstance.overrides.stabilize_neck)
+
+    if combined_neck and (not own_neck or combined_neck > own_neck) then
+        rawset(visual_item, "stabilize_neck", combined_neck)
     end
 
     rawset(visual_item, "npclook_generated", true)
@@ -2103,13 +2029,8 @@ hook_method(EquipmentComponent, "_spawn_player_item_units", function(
     end
 
     if item.npclook_raw_unit == true then
-        local package_ready = slot and slot.item_loaded == true
-            or RAW_UNITS.package_ready(item, Managers.package)
-        local ready, raw_error, loading = RAW_UNITS.ensure_ready(
-            item,
-            package_ready,
-            Managers.package
-        )
+        -- Our equipment components load nothing themselves, the lease is loaded before the equip
+        local ready, raw_error, loading = RAW_UNITS.ensure_ready(item, slot.item_loaded == true)
 
         if not ready then
             report_raw_spawn_failure(self, slot, item, raw_error, loading)
@@ -2169,1089 +2090,6 @@ hook_method(EquipmentComponent, "_spawn_player_item_units", function(
     util.apply_opacity_to_units(live_visual.capture_slot_units(slot), item.npclook_opacity)
     live_visual.apply_slot_meshes(slot, item, attach_settings and attach_settings.item_definitions)
 end)
-
--- Prediction packages
-
-local prediction = {
-    direct_unloads = setmetatable({}, { __mode = "k" }),
-    slot_records = setmetatable({}, { __mode = "k" }),
-}
-
-function prediction.item_queue(storage, handler, item, create)
-    local item_queues = storage[handler]
-
-    if not item_queues and create then
-        item_queues = setmetatable({}, { __mode = "k" })
-        storage[handler] = item_queues
-    end
-
-    local queue = item_queues and item_queues[item]
-
-    if not queue and create then
-        queue = {}
-        item_queues[item] = queue
-    end
-
-    return queue, item_queues
-end
-
-function prediction.queue(storage, handler, item, value)
-    if not handler or not item or not value then
-        return
-    end
-
-    local queue = prediction.item_queue(storage, handler, item, true)
-
-    queue[#queue + 1] = value
-end
-
-function prediction.take(storage, handler, item)
-    local queue, item_queues = prediction.item_queue(storage, handler, item, false)
-
-    if not queue or #queue == 0 then
-        return nil
-    end
-
-    local value = table.remove(queue, 1)
-
-    if #queue == 0 then
-        item_queues[item] = nil
-    end
-
-    if next(item_queues) == nil then
-        storage[handler] = nil
-    end
-
-    return value
-end
-
-function prediction.package_names(handler, item)
-    local dependencies, dependency_error = item_package_dependencies(
-        item,
-        handler and handler._item_definitions,
-        handler and handler._mission
-    )
-
-    if not dependencies then
-        return nil, dependency_error
-    end
-
-    local package_names = table.keys(dependencies)
-
-    table.sort(package_names)
-
-    return package_names
-end
-
-function prediction.begin_capture(handler, item)
-    local package_names = prediction.package_names(handler, item)
-
-    if not package_names then
-        return nil
-    end
-
-    local loaded_by_package = handler and handler._loaded_packages
-    local before = {}
-
-    for i = 1, #package_names do
-        local package_name = package_names[i]
-        local loaded_packages = loaded_by_package and loaded_by_package[package_name]
-
-        before[package_name] = type(loaded_packages) == "table" and #loaded_packages or 0
-    end
-
-    return {
-        before = before,
-        item_name = item.name,
-        package_manager = Managers.package,
-        package_names = package_names,
-    }
-end
-
-function prediction.finish_capture(handler, context)
-    if not context then
-        return nil
-    end
-
-    local loaded_by_package = handler and handler._loaded_packages
-    local record = {
-        item_name = context.item_name,
-        package_manager = context.package_manager,
-        packages = {},
-    }
-
-    for i = 1, #context.package_names do
-        local package_name = context.package_names[i]
-        local loaded_packages = loaded_by_package and loaded_by_package[package_name]
-        local first_new_index = context.before[package_name] + 1
-
-        if type(loaded_packages) ~= "table" or first_new_index > #loaded_packages then
-            return nil
-        end
-
-        for load_index = first_new_index, #loaded_packages do
-            record.packages[#record.packages + 1] = {
-                load_id = loaded_packages[load_index],
-                package_name = package_name,
-            }
-        end
-    end
-
-    return record
-end
-
-function prediction.records(handler, create)
-    local records = prediction.slot_records[handler]
-
-    if not records and create then
-        records = {}
-        prediction.slot_records[handler] = records
-    end
-
-    return records
-end
-
-function prediction.set_slot_record(handler, slot_name, record)
-    if not handler or not slot_name then
-        return
-    end
-
-    local records = prediction.records(handler, true)
-
-    records[slot_name] = record
-end
-
-function prediction.clear_handler(handler)
-    if handler then
-        prediction.slot_records[handler] = nil
-    end
-end
-
-function prediction.claim_record_load_ids(claimed, record)
-    for i = 1, #(record and record.packages or {}) do
-        claimed[record.packages[i].load_id] = true
-    end
-end
-
-function prediction.claimed_load_ids(handler, records)
-    local claimed = {}
-
-    for _, record in pairs(records or {}) do
-        prediction.claim_record_load_ids(claimed, record)
-    end
-
-    local item_queues = prediction.direct_unloads[handler]
-
-    for _, queue in pairs(item_queues or {}) do
-        for i = 1, #queue do
-            prediction.claim_record_load_ids(claimed, queue[i].record)
-        end
-    end
-
-    return claimed
-end
-
-function prediction.record_is_live(handler, record)
-    local loaded_by_package = handler and handler._loaded_packages
-
-    if type(loaded_by_package) ~= "table" or type(record) ~= "table" then
-        return false
-    end
-
-    for i = 1, #(record.packages or {}) do
-        local package = record.packages[i]
-        local load_ids = loaded_by_package[package.package_name]
-        local found = false
-
-        for load_index = 1, #(load_ids or {}) do
-            if load_ids[load_index] == package.load_id then
-                found = true
-                break
-            end
-        end
-
-        if not found then
-            return false
-        end
-    end
-
-    return true
-end
-
-function prediction.bootstrap(ext)
-    local handler = ext and ext._mispredict_package_handler
-    local equipment = ext and ext._equipment
-    local slot_configuration = ext and ext._slot_configuration
-    local loaded_by_package = handler and handler._loaded_packages
-
-    if type(equipment) ~= "table" or type(slot_configuration) ~= "table"
-        or type(loaded_by_package) ~= "table" then
-        return
-    end
-
-    local records = prediction.records(handler, true)
-
-    for slot_name, record in pairs(records) do
-        local slot = equipment[slot_name]
-        local item = slot and slot.equipped and slot.item
-
-        if not item or record.item_name ~= item.name
-            or not prediction.record_is_live(handler, record) then
-            records[slot_name] = nil
-        end
-    end
-
-    local claimed = prediction.claimed_load_ids(handler, records)
-    local available = {}
-
-    for package_name, load_ids in pairs(loaded_by_package) do
-        if type(load_ids) == "table" then
-            local unclaimed = {}
-
-            for i = 1, #load_ids do
-                if not claimed[load_ids[i]] then
-                    unclaimed[#unclaimed + 1] = load_ids[i]
-                end
-            end
-
-            available[package_name] = unclaimed
-        end
-    end
-
-    local cursors = {}
-    local equip_order = PlayerCharacterConstants.slot_equip_order
-
-    for i = 1, #equip_order do
-        local slot_name = equip_order[i]
-        local slot = equipment[slot_name]
-        local item = slot and slot.equipped and slot.item
-        local config = slot_configuration[slot_name]
-        local current = records[slot_name]
-
-        if not current and item and item.npclook_generated ~= true
-            and config and config.mispredict_packages then
-            local package_names = prediction.package_names(handler, item)
-            local packages = {}
-            local next_cursors = {}
-            local complete = package_names ~= nil
-
-            for package_index = 1, #(package_names or {}) do
-                local package_name = package_names[package_index]
-                local cursor = (cursors[package_name] or 0) + 1
-                local load_id = available[package_name] and available[package_name][cursor]
-
-                if load_id == nil then
-                    complete = false
-                    break
-                end
-
-                next_cursors[package_name] = cursor
-                packages[#packages + 1] = {
-                    load_id = load_id,
-                    package_name = package_name,
-                }
-            end
-
-            if complete then
-                for package_name, cursor in pairs(next_cursors) do
-                    cursors[package_name] = cursor
-                end
-
-                records[slot_name] = {
-                    item_name = item.name,
-                    package_manager = Managers.package,
-                    packages = packages,
-                }
-            end
-        end
-    end
-end
-
-function prediction.pending_count(handler, item)
-    local pending_unloads = handler and handler._pending_unloads
-    local count = 0
-
-    for _, items in pairs(pending_unloads or {}) do
-        for i = 1, #items do
-            if rawequal(items[i], item) then
-                count = count + 1
-            end
-        end
-    end
-
-    return count
-end
-
-function prediction.prepare_direct_unload(ext, slot_name, item)
-    if not item or item.npclook_generated == true then
-        return nil
-    end
-
-    local handler = ext and ext._mispredict_package_handler
-    local slot_configuration = ext and ext._slot_configuration
-    local slot_config = slot_configuration and slot_configuration[slot_name]
-
-    if not handler or not slot_config or not slot_config.mispredict_packages then
-        return nil
-    end
-
-    local records = prediction.records(handler, false)
-    local record = records and records[slot_name]
-
-    if not record or record.item_name ~= item.name
-        or not prediction.record_is_live(handler, record) then
-        prediction.bootstrap(ext)
-        records = prediction.records(handler, false)
-        record = records and records[slot_name]
-    end
-
-    return {
-        handler = handler,
-        item = item,
-        item_name = item.name,
-        record = record,
-        slot_name = slot_name,
-    }
-end
-
-function prediction.commit_direct_unload(marker)
-    if not marker then
-        return
-    end
-
-    local records = prediction.records(marker.handler, false)
-
-    if records then
-        records[marker.slot_name] = nil
-    end
-
-    prediction.queue(prediction.direct_unloads, marker.handler, marker.item, marker)
-end
-
-function prediction.release_record(handler, record)
-    local loaded_by_package = handler and handler._loaded_packages
-    local package_manager = record and (record.package_manager or Managers.package)
-
-    if type(loaded_by_package) ~= "table" or not package_manager then
-        return
-    end
-
-    for i = 1, #(record.packages or {}) do
-        local package = record.packages[i]
-        local loaded_packages = loaded_by_package[package.package_name]
-        local found_index
-
-        if type(loaded_packages) == "table" then
-            for load_index = #loaded_packages, 1, -1 do
-                if loaded_packages[load_index] == package.load_id then
-                    found_index = load_index
-                    break
-                end
-            end
-
-            -- The game pops the newest id of a shared package, which can be this record's
-            if not found_index and #loaded_packages > 0 then
-                found_index = #loaded_packages
-            end
-        end
-
-        if found_index then
-            pcall(package_manager.release, package_manager, table.remove(loaded_packages, found_index))
-
-            if table.is_empty(loaded_packages) then
-                loaded_by_package[package.package_name] = nil
-            end
-        end
-    end
-end
-
-function prediction.final_unload_item(handler, item)
-    if type(item) ~= "table" then
-        return item
-    end
-
-    local dependencies = item_package_dependencies(
-        item,
-        handler and handler._item_definitions,
-        handler and handler._mission
-    )
-    local loaded_by_package = handler and handler._loaded_packages
-
-    if type(dependencies) ~= "table" or type(loaded_by_package) ~= "table" then
-        return item
-    end
-
-    local filtered_dependencies = {}
-    local filtered = false
-
-    for package_name in pairs(dependencies) do
-        local loaded_packages = loaded_by_package[package_name]
-
-        if type(loaded_packages) == "table" and #loaded_packages > 0 then
-            filtered_dependencies[package_name] = true
-        else
-            filtered = true
-        end
-    end
-
-    if not filtered then
-        return item
-    end
-
-    -- Darktide's delayed unload assumes every compiled dependency has a matching load stack.
-    -- Preserve every valid native release, but omit only absent stacks before vanilla indexes them.
-    -- The proxy deliberately has no name or attachment data, so the dependency compiler cannot
-    -- rebuild the missing master-item dependency set.
-    return {
-        resource_dependencies = filtered_dependencies,
-    }
-end
-
--- Darktide: scripts/extension_systems/visual_loadout/mispredict_package_handler.lua
-hook_method(MispredictPackageHandler, "item_equipped", function(func, self, item)
-    if item and item.npclook_generated == true then
-        return
-    end
-
-    return func(self, item)
-end)
-
--- Darktide: scripts/extension_systems/visual_loadout/mispredict_package_handler.lua
-hook_method(MispredictPackageHandler, "item_unequipped", function(func, self, item, fixed_frame)
-    if item and item.npclook_generated == true then
-        return
-    end
-
-    return func(self, item, fixed_frame)
-end)
-
--- Darktide: scripts/extension_systems/visual_loadout/mispredict_package_handler.lua
-hook_method(MispredictPackageHandler, "_unload_item_packages", function(func, self, item)
-    if item and item.npclook_generated == true then
-        return
-    end
-
-    local marker = prediction.take(prediction.direct_unloads, self, item)
-
-    if marker and marker.record then
-        prediction.release_record(self, marker.record)
-        return
-    end
-
-    return func(self, prediction.final_unload_item(self, item))
-end)
-
-local LIVE_PACKAGE_RELEASE_DELAY = 2
-
--- A live package record owns every visual unit created while that record is active.
--- Its release delay starts only after those exact units have been destroyed.
-live_visual.track_package_units = function(record, units, unit_spawner)
-    if type(record) ~= "table" or type(units) ~= "table" then
-        return
-    end
-
-    local tracked_units = record.tracked_units
-    local tracked_lookup = record.tracked_unit_lookup
-
-    if type(tracked_units) ~= "table" then
-        tracked_units = {}
-        record.tracked_units = tracked_units
-    end
-
-    if type(tracked_lookup) ~= "table" then
-        tracked_lookup = {}
-        record.tracked_unit_lookup = tracked_lookup
-    end
-
-    for i = 1, #units do
-        local unit = units[i]
-
-        if unit and not tracked_lookup[unit] then
-            tracked_lookup[unit] = true
-            tracked_units[#tracked_units + 1] = unit
-        end
-    end
-
-    if unit_spawner then
-        record.unit_spawner = unit_spawner
-    end
-end
-
-live_visual.package_units_destroyed = function(record)
-    local tracked_units = record and record.tracked_units
-
-    if type(tracked_units) ~= "table" or #tracked_units == 0 then
-        return true
-    end
-
-    local tracked_lookup = record.tracked_unit_lookup
-
-    for i = #tracked_units, 1, -1 do
-        local unit = tracked_units[i]
-
-        if not util.safe_unit_alive(unit) then
-            if type(tracked_lookup) == "table" then
-                tracked_lookup[unit] = nil
-            end
-
-            table.remove(tracked_units, i)
-        end
-    end
-
-    return #tracked_units == 0
-end
-
-live_visual.clear_package_unit_tracking = function(record)
-    if type(record) ~= "table" then
-        return
-    end
-
-    if type(record.tracked_units) == "table" then
-        table.clear(record.tracked_units)
-    end
-
-    if type(record.tracked_unit_lookup) == "table" then
-        table.clear(record.tracked_unit_lookup)
-    end
-
-    record.unit_spawner = nil
-end
-
-live_visual.transfer_package_units = function(source, destination)
-    if type(source) ~= "table" or type(destination) ~= "table" then
-        return
-    end
-
-    live_visual.track_package_units(destination, source.tracked_units or {}, source.unit_spawner)
-    live_visual.clear_package_unit_tracking(source)
-end
-
-local function retained_live_raw_package_entries(package_manager)
-    local cache = _retained_live_raw_package_cache
-
-    if cache.package_manager ~= package_manager then
-        -- The old PackageManager owns retained raw packages.
-        cache.package_manager = package_manager
-        cache.entries = {}
-    end
-
-    return cache.entries
-end
-
-local function refresh_live_package_record(record)
-    if not record then
-        return false
-    end
-
-    if type(record.package_entries) == "table" then
-        for i = 1, #(record.package_names or {}) do
-            local entry = record.package_entries[i]
-
-            if not entry or entry.ready ~= true then
-                record.ready = false
-                record.waiting_package = record.package_names[i]
-                return false
-            end
-        end
-
-        record.ready = true
-        record.waiting_package = nil
-        return true
-    end
-
-    if record.loading_complete ~= true then
-        record.ready = false
-        return false
-    end
-
-    for i = 1, #(record.load_ids or {}) do
-        local load_id = record.load_ids[i]
-
-        if not record.loaded_ids[load_id] then
-            record.ready = false
-            record.waiting_package = record.package_names[i]
-            return false
-        end
-    end
-
-    record.ready = true
-    record.waiting_package = nil
-    return true
-end
-
-local function release_live_package_record(record)
-    if not record or record.released == true then
-        return true
-    end
-
-    if type(record.package_entries) == "table" then
-        local seen = {}
-
-        for i = 1, #record.package_entries do
-            local entry = record.package_entries[i]
-
-            if type(entry) == "table" and not seen[entry] then
-                seen[entry] = true
-                entry.references = math.max((tonumber(entry.references) or 1) - 1, 0)
-            end
-        end
-
-        table.clear(record.package_entries)
-        live_visual.clear_package_unit_tracking(record)
-        record.released = true
-        record.release_queued = nil
-        return true
-    elseif type(record.load_ids) ~= "table" then
-        live_visual.clear_package_unit_tracking(record)
-        record.released = true
-        record.release_queued = nil
-        return true
-    end
-
-    -- Shared raw packages stay with their PackageManager.
-    if record.persistent == true then
-        table.clear(record.load_ids)
-        table.clear(record.loaded_ids or {})
-        live_visual.clear_package_unit_tracking(record)
-        record.released = true
-        record.release_queued = nil
-        return true
-    end
-
-    local package_manager = record.package_manager
-
-    if not package_manager then
-        table.clear(record.load_ids)
-        live_visual.clear_package_unit_tracking(record)
-        record.released = true
-        record.release_queued = nil
-        return true
-    elseif package_manager._shutdown_has_started == true then
-        if package_manager ~= Managers.package then
-            table.clear(record.load_ids)
-            live_visual.clear_package_unit_tracking(record)
-            record.released = true
-            record.release_queued = nil
-            return true
-        end
-
-        return false
-    end
-
-    local release = package_manager.release
-
-    if type(release) ~= "function" then
-        if package_manager ~= Managers.package then
-            table.clear(record.load_ids)
-            live_visual.clear_package_unit_tracking(record)
-            record.released = true
-            record.release_queued = nil
-            return true
-        end
-
-        return false
-    end
-
-    for i = #record.load_ids, 1, -1 do
-        local load_id = record.load_ids[i]
-        local ok, err = pcall(release, package_manager, load_id)
-
-        if ok then
-            table.remove(record.load_ids, i)
-        else
-            util.report_once(record, "release_error", err, function(message)
-                mod:warning("Could not release a retired cosmetic package reference: %s", message)
-            end)
-
-            if package_manager ~= Managers.package then
-                table.remove(record.load_ids, i)
-            end
-        end
-    end
-
-    local released = #record.load_ids == 0
-
-    if released then
-        live_visual.clear_package_unit_tracking(record)
-        record.released = true
-        record.release_queued = nil
-    end
-
-    return released
-end
-
-local function queue_live_package_release(record, delay)
-    if not record or record.released == true then
-        return
-    end
-
-    local release_delay = delay == nil and LIVE_PACKAGE_RELEASE_DELAY or math.max(tonumber(delay) or 0, 0)
-
-    if record.raw_unit then
-        release_delay = math.max(release_delay, LIVE_PACKAGE_RELEASE_DELAY)
-    end
-
-    record.cancelled = true
-    record.release_delay = math.max(tonumber(record.release_delay) or 0, release_delay)
-
-    if record.release_queued == true then
-        return
-    end
-
-    record.release_queued = true
-    _retired_live_package_loads[#_retired_live_package_loads + 1] = record
-end
-
-local function retire_live_slot_packages(slot_name, delay)
-    local record = _live_package_loads[slot_name]
-
-    if record then
-        _live_package_loads[slot_name] = nil
-        queue_live_package_release(record, delay)
-    end
-
-    local pending_record = _pending_live_package_loads[slot_name]
-
-    if pending_record then
-        _pending_live_package_loads[slot_name] = nil
-        queue_live_package_release(pending_record, delay)
-    end
-end
-
-local function retire_all_live_slot_packages(delay)
-    local slots = {}
-
-    for slot_name in pairs(_live_package_loads) do
-        slots[slot_name] = true
-    end
-
-    for slot_name in pairs(_pending_live_package_loads) do
-        slots[slot_name] = true
-    end
-
-    local slot_names = table.keys(slots)
-
-    for i = 1, #slot_names do
-        retire_live_slot_packages(slot_names[i], delay)
-    end
-end
-
--- Count this delay on gameplay time with the rest of teardown.
-local function live_package_gameplay_delta()
-    local time_manager = gameplay_time_manager()
-
-    if not time_manager then
-        _live_package_gameplay_t = nil
-        return 0
-    end
-
-    local gameplay_t = time_manager:time("gameplay")
-
-    if type(gameplay_t) ~= "number" then
-        _live_package_gameplay_t = nil
-        return 0
-    end
-
-    local previous_t = _live_package_gameplay_t
-    _live_package_gameplay_t = gameplay_t
-
-    if not previous_t or gameplay_t < previous_t then
-        return 0
-    end
-
-    return gameplay_t - previous_t
-end
-
-local function update_live_package_releases()
-    if #_retired_live_package_loads == 0 then
-        _live_package_gameplay_t = nil
-        return
-    end
-
-    local release_dt = live_package_gameplay_delta()
-
-    for i = #_retired_live_package_loads, 1, -1 do
-        local record = _retired_live_package_loads[i]
-        local teardown_complete = record.persistent == true or live_visual.package_units_destroyed(record)
-
-        if teardown_complete then
-            record.release_delay = math.max((record.release_delay or 0) - release_dt, 0)
-
-            if record.release_delay == 0 and release_live_package_record(record) then
-                table.remove(_retired_live_package_loads, i)
-            end
-        end
-    end
-end
-
-local function release_all_live_package_records()
-    retire_all_live_slot_packages(0)
-
-    for i = #_retired_live_package_loads, 1, -1 do
-        local record = _retired_live_package_loads[i]
-
-        if record.raw_unit or record.package_manager == Managers.package then
-            -- Hot teardown cannot wait for engine resource references to drain.
-            -- Keep the reference until PackageManager itself is destroyed.
-            record.persistent = true
-        end
-
-        release_live_package_record(record)
-        table.remove(_retired_live_package_loads, i)
-    end
-
-    _live_package_gameplay_t = nil
-end
-
-local function live_package_entry_has_reference(entry)
-    if type(entry) ~= "table" then
-        return false
-    elseif entry.resource_loader_ticket then
-        local status = RAW_UNITS.ticket_status(entry.resource_loader_ticket)
-        return status == "pending" or status == "loaded"
-    end
-
-    return entry.load_id ~= nil
-end
-
-local function acquire_live_item_packages(ext, slot_name, item, visual_signature)
-    local package_manager = Managers.package
-    local load = package_manager and package_manager.load
-
-    if type(load) ~= "function" then
-        return nil, loc("error_live_package_manager")
-    end
-
-    local item_name = item and item.name
-    local pending_record = _pending_live_package_loads[slot_name]
-
-    if pending_record
-        and (pending_record.package_manager ~= package_manager
-            or pending_record.item_name ~= item_name
-            or pending_record.visual_signature ~= visual_signature) then
-        _pending_live_package_loads[slot_name] = nil
-        queue_live_package_release(pending_record, 0)
-        pending_record = nil
-    end
-
-    if pending_record then
-        refresh_live_package_record(pending_record)
-
-        if pending_record.ready then
-            _pending_live_package_loads[slot_name] = nil
-
-            if item and item.npclook_raw_unit == true then
-                RAW_UNITS.mark_package_ready(item, package_manager)
-            end
-
-            return pending_record
-        end
-
-        return nil, loc("error_live_package_not_ready", tostring(pending_record.waiting_package)), true
-    end
-
-    local item_definitions = ext and ext._item_definitions or item_cache()
-    local mission = ext and ext._mission
-    local dependencies, dependency_error = item_package_dependencies(item, item_definitions, mission)
-
-    if not dependencies then
-        return nil, loc("error_package_dependencies", tostring(dependency_error))
-    end
-
-    local package_names = table.keys(dependencies)
-    table.sort(package_names)
-
-    _live_package_counter = _live_package_counter + 1
-
-    local persistent = item and item.npclook_raw_unit == true
-        and item.npclook_raw_retain_package ~= false
-    local record = {
-        item_name = item_name,
-        loaded_ids = {},
-        load_ids = {},
-        package_names = package_names,
-        package_manager = package_manager,
-        visual_signature = visual_signature,
-        persistent = persistent,
-        ready = #package_names == 0,
-        waiting_package = package_names[1],
-        loading_complete = #package_names == 0,
-        cancelled = false,
-        raw_unit = item and item.npclook_raw_unit == true,
-    }
-    local reference_name = string.format("NPCLookLiveSlot_%s_%d", tostring(slot_name), _live_package_counter)
-
-    if persistent then
-        local retained_entries = retained_live_raw_package_entries(package_manager)
-        record.package_entries = {}
-
-        for i = 1, #package_names do
-            local package_name = package_names[i]
-            local package_entry = retained_entries[package_name]
-
-            if type(package_entry) ~= "table"
-                or package_entry.package_manager ~= package_manager
-                or package_entry.package_name ~= package_name
-                or not live_package_entry_has_reference(package_entry) then
-                retained_entries[package_name] = nil
-                package_entry = nil
-            end
-
-            if not package_entry then
-                package_entry = {
-                    package_manager = package_manager,
-                    package_name = package_name,
-                    load_id = nil,
-                    ready = false,
-                    references = 0,
-                    persistent = true,
-                }
-                retained_entries[package_name] = package_entry
-
-                local function package_loaded(ticket, _, load_error)
-                    if retained_live_raw_package_entries(package_manager)[package_name] ~= package_entry then
-                        if ticket then
-                            RAW_UNITS.release_ticket(ticket)
-                        end
-                        return
-                    elseif load_error then
-                        package_entry.error = tostring(load_error)
-                        return
-                    end
-
-                    package_entry.resource_loader_ticket = ticket
-                    package_entry.ready = true
-
-                    if type(mod.npclook_schedule_reapply) == "function" then
-                        mod.npclook_schedule_reapply()
-                    else
-                        schedule_reapply()
-                    end
-
-                    -- Retained packages are shared by every owner.
-                    for _, owner in pairs(live_visual.owners.by_player) do
-                        owner.reapply_pending = true
-                    end
-                end
-
-                local ticket, load_error = RAW_UNITS.acquire_package(
-                    package_name,
-                    package_loaded,
-                    {
-                        prioritize = true,
-                        reference_name = reference_name,
-                    }
-                )
-
-                if not ticket then
-                    if retained_entries[package_name] == package_entry then
-                        retained_entries[package_name] = nil
-                    end
-
-                    release_live_package_record(record)
-                    return nil, loc(
-                        "error_live_package_acquire",
-                        tostring(package_name),
-                        tostring(load_error or loc("generic_unknown_error"))
-                    )
-                end
-
-                package_entry.resource_loader_ticket = ticket
-                package_entry.ready = RAW_UNITS.ticket_status(ticket) == "loaded"
-            end
-
-            package_entry.references = (tonumber(package_entry.references) or 0) + 1
-            record.package_entries[i] = package_entry
-        end
-
-        refresh_live_package_record(record)
-    else
-        -- Callbacks fire outside the owner scope that started the load.
-        local pending_loads = _pending_live_package_loads
-        local owner = live_visual.owners.current
-
-        local function package_loaded(load_id)
-            if record.cancelled or record.loaded_ids[load_id] then
-                return
-            end
-
-            record.loaded_ids[load_id] = true
-
-            if record.loading_complete then
-                local became_ready = refresh_live_package_record(record)
-
-                if became_ready and pending_loads[slot_name] == record then
-                    if owner == live_visual.owners.local_record then
-                        schedule_reapply()
-                    else
-                        owner.reapply_pending = true
-                    end
-                end
-            end
-        end
-
-        for i = 1, #package_names do
-            local package_name = package_names[i]
-            local ok_load, load_id = pcall(load, package_manager, package_name, reference_name, package_loaded, true)
-
-            if not ok_load or not load_id then
-                record.cancelled = true
-
-                if not release_live_package_record(record) then
-                    queue_live_package_release(record, 0)
-                end
-
-                return nil, loc("error_live_package_acquire", tostring(package_name), tostring(load_id))
-            end
-
-            record.load_ids[#record.load_ids + 1] = load_id
-        end
-
-        record.loading_complete = true
-        refresh_live_package_record(record)
-    end
-
-    if record.ready then
-        if persistent then
-            RAW_UNITS.mark_package_ready(item, package_manager)
-        end
-
-        return record
-    end
-
-    _pending_live_package_loads[slot_name] = record
-
-    return nil, loc("error_live_package_not_ready", tostring(record.waiting_package)), true
-end
-
--- Load callbacks arrive a frame late even for packages the game already has; a native item's
--- record is usable as soon as every package is in memory
-live_visual.acquire_native_item_packages = function(ext, slot_name, item, visual_signature)
-    local record, package_error, packages_loading = acquire_live_item_packages(ext, slot_name, item, visual_signature)
-
-    if record or not packages_loading then
-        return record, package_error, packages_loading
-    end
-
-    local pending_record = _pending_live_package_loads[slot_name]
-    local package_manager = pending_record and pending_record.package_manager
-    local has_loaded = package_manager and package_manager.has_loaded
-
-    if type(has_loaded) ~= "function" or pending_record.item_name ~= (item and item.name)
-        or type(pending_record.load_ids) ~= "table" then
-        return nil, package_error, true
-    end
-
-    for i = 1, #pending_record.package_names do
-        if not has_loaded(package_manager, pending_record.package_names[i]) then
-            return nil, package_error, true
-        end
-    end
-
-    _pending_live_package_loads[slot_name] = nil
-
-    return pending_record
-end
 
 live_visual.capture_slot_units = function(slot)
     if not slot then
@@ -3347,343 +2185,6 @@ live_visual.capture_slot_units = function(slot)
     end
 
     return ordered
-end
-
-live_visual.track_slot_package_units = function(record, ext, slot_name, captured_units)
-    if type(record) ~= "table" then
-        return
-    end
-
-    local equipment_component = ext and ext._equipment_component
-    local unit_spawner = equipment_component and equipment_component._unit_spawner
-    local slot = ext and ext._equipment and ext._equipment[slot_name]
-    local units = captured_units or live_visual.capture_slot_units(slot)
-
-    live_visual.track_package_units(record, units, unit_spawner)
-end
-
-live_visual.refresh_active_package_units = function(ext)
-    local equipment = ext and ext._equipment
-
-    if type(equipment) ~= "table" then
-        return
-    end
-
-    for slot_name, record in pairs(_live_package_loads) do
-        local slot = equipment[slot_name]
-        local item = slot and slot.item
-
-        if type(record) == "table" and type(item) == "table"
-            and item.npclook_generated == true
-            and item.name == record.item_name
-            and item.npclook_visual_signature == record.visual_signature then
-            live_visual.package_units_destroyed(record)
-            live_visual.track_slot_package_units(record, ext, slot_name)
-        end
-    end
-end
-
-live_visual.flush_slot_unit_spawner = function(unit_spawner)
-    if not unit_spawner then
-        return
-    end
-
-    local flush = unit_spawner.commit_and_remove_pending_units
-        or unit_spawner.remove_pending_units
-
-    if type(flush) == "function" then
-        pcall(flush, unit_spawner)
-    end
-end
-
-live_visual.discard_captured_slot_units = function(ext, ordered)
-    local unit_spawner = ext and ext._equipment_component and ext._equipment_component._unit_spawner
-    local destroy_list = extra_slot_runtime.destroy_unit_list
-
-    if type(destroy_list) == "function" then
-        pcall(destroy_list, ordered, unit_spawner)
-        return
-    end
-
-    local mark_for_deletion = unit_spawner and unit_spawner.mark_for_deletion
-
-    if type(mark_for_deletion) ~= "function" then
-        return
-    end
-
-    for i = 1, #(ordered or {}) do
-        local unit = ordered[i]
-
-        if util.safe_unit_alive(unit) then
-            local ok_world, world = pcall(Unit.world, unit)
-
-            if ok_world and world then
-                for _ = 1, 16 do
-                    pcall(World.unlink_unit, world, unit)
-                end
-            end
-
-            pcall(mark_for_deletion, unit_spawner, unit)
-        end
-    end
-end
-
-local function discard_orphaned_slot_units(ext, slot, package_record)
-    local unit_spawner = ext and ext._equipment_component and ext._equipment_component._unit_spawner
-    local ordered = live_visual.capture_slot_units(slot)
-
-    live_visual.track_package_units(package_record, ordered, unit_spawner)
-    live_visual.discard_captured_slot_units(ext, ordered)
-    live_visual.flush_slot_unit_spawner(unit_spawner)
-end
-
-live_visual.clear_slot_scripts = function(ext, slot_name)
-    for _, field in ipairs({ "_wieldable_slot_scripts", "_equipped_slot_scripts" }) do
-        local by_slot = ext and ext[field]
-        local scripts = by_slot and by_slot[slot_name]
-
-        if type(scripts) == "table" then
-            for _, script in pairs(scripts) do
-                if type(script) == "table" and type(script.destroy) == "function" then
-                    pcall(script.destroy, script)
-                end
-            end
-
-            table.clear(scripts)
-            by_slot[slot_name] = nil
-        end
-    end
-end
-
-live_visual.reset_slot_runtime_fields = reset_slot_runtime_fields
-
-local function clear_equipment_slot_record(ext, slot_name, options)
-    local slot = ext and ext._equipment and ext._equipment[slot_name]
-
-    if not slot then
-        return false, loc("error_visual_slot_unavailable")
-    end
-
-    options = type(options) == "table" and options or {}
-
-    local package_record = options.package_record or _live_package_loads[slot_name]
-
-    live_visual.clear_slot_scripts(ext, slot_name)
-    discard_orphaned_slot_units(ext, slot, package_record)
-    live_visual.reset_slot_runtime_fields(slot)
-
-    if options.preserve_live_packages ~= true then
-        retire_live_slot_packages(slot_name)
-    end
-
-    return true
-end
-
-local function normalize_empty_equipment_slot(ext, slot_name)
-    local slot = ext and ext._equipment and ext._equipment[slot_name]
-
-    if not slot then
-        return false, loc("error_visual_slot_unavailable")
-    end
-
-    if not slot.equipped or slot.item then
-        return true, false
-    end
-
-    local cleared, clear_error = clear_equipment_slot_record(ext, slot_name)
-
-    return cleared, cleared and true or clear_error
-end
-
-local function player_network_ids(player)
-    local peer_id
-    local local_player_id
-
-    if player and type(player.peer_id) == "function" then
-        local ok, value = pcall(player.peer_id, player)
-        peer_id = ok and value or nil
-    end
-
-    if player and type(player.local_player_id) == "function" then
-        local ok, value = pcall(player.local_player_id, player)
-        local_player_id = ok and value or nil
-    end
-
-    return peer_id, local_player_id
-end
-
-local function profile_package_sync_pending(player, ext, plan)
-    local peer_id, local_player_id = player_network_ids(player)
-
-    if not peer_id or local_player_id == nil then
-        return false
-    end
-
-    local profile_manager = Managers.profile_synchronization
-    local profile_host = profile_manager and type(profile_manager.synchronizer_host) == "function"
-        and profile_manager:synchronizer_host()
-    local profile_updates = profile_host and profile_host._profile_updates
-    local peer_updates = profile_updates and profile_updates[peer_id]
-
-    if peer_updates and peer_updates[local_player_id] then
-        return true
-    end
-
-    local package_manager = Managers.package_synchronization
-    local package_host = package_manager and type(package_manager.synchronizer_host) == "function"
-        and package_manager:synchronizer_host()
-    local host_syncs = package_host and package_host._syncs
-    local peer_syncs = host_syncs and host_syncs[peer_id]
-
-    if peer_syncs and peer_syncs[local_player_id] then
-        return true
-    end
-
-    local package_client = package_manager and type(package_manager.synchronizer_client) == "function"
-        and package_manager:synchronizer_client()
-    package_client = package_client or ext and ext._equipment_component and ext._equipment_component._package_synchronizer_client
-
-    if package_client and type(package_client.alias_loaded) == "function" then
-        for slot_name in pairs(plan.affected) do
-            if not (plan.overlay_slots and plan.overlay_slots[slot_name]) then
-                local ok_loaded, loaded = pcall(package_client.alias_loaded, package_client, peer_id, local_player_id, slot_name)
-
-                if ok_loaded and not loaded then
-                    return true
-                end
-            end
-        end
-    end
-
-    return false
-end
-
-live_visual.stale_unit_fields = {
-    "unit_3p",
-    "unit_1p",
-    "item_unit_3p",
-    "item_unit_1p",
-    "parent_unit_3p",
-    "parent_unit_1p",
-    "owner_unit_3p",
-}
-
-live_visual.stale_map_fields = {
-    { "attachments_by_unit_3p", true },
-    { "attachments_by_unit_1p", true },
-    { "attachment_id_lookup_3p", false },
-    { "attachment_id_lookup_1p", false },
-    { "attachment_map_by_unit_3p", false },
-    { "attachment_map_by_unit_1p", false },
-    { "item_name_by_unit_3p", false },
-    { "item_name_by_unit_1p", false },
-}
-
-live_visual.prune_dead_unit_map = function(map, nested_values)
-    if type(map) ~= "table" then
-        return false, false
-    end
-
-    local repaired = false
-
-    for key, value in pairs(map) do
-        local dead_key = type(key) == "userdata" and not util.safe_unit_alive(key)
-        local dead_value = type(value) == "userdata" and not util.safe_unit_alive(value)
-
-        if dead_key or dead_value then
-            map[key] = nil
-            repaired = true
-        elseif nested_values and type(value) == "table" then
-            local nested_repaired, has_values = live_visual.prune_dead_unit_map(value, false)
-            repaired = nested_repaired or repaired
-
-            if not has_values then
-                map[key] = nil
-                repaired = true
-            end
-        end
-    end
-
-    return repaired, next(map) ~= nil
-end
-
-live_visual.prune_dead_slot_references = function(slot)
-    if type(slot) ~= "table" then
-        return false
-    end
-
-    local repaired = false
-    local unit_fields = live_visual.stale_unit_fields
-
-    for i = 1, #unit_fields do
-        local field = unit_fields[i]
-        local unit = slot[field]
-
-        if unit ~= nil and not util.safe_unit_alive(unit) then
-            slot[field] = nil
-            repaired = true
-        end
-    end
-
-    local map_fields = live_visual.stale_map_fields
-
-    for i = 1, #map_fields do
-        local field = map_fields[i][1]
-        local map = slot[field]
-
-        if type(map) == "table" then
-            local map_repaired, has_values = live_visual.prune_dead_unit_map(map, map_fields[i][2])
-            repaired = map_repaired or repaired
-
-            if not has_values then
-                slot[field] = nil
-            end
-        end
-    end
-
-    if repaired then
-        if type(slot.cached_nodes) == "table" then
-            table.clear(slot.cached_nodes)
-        else
-            slot.cached_nodes = {}
-        end
-    end
-
-    return repaired
-end
-
-live_visual.sanitize_visibility_equipment = function(ext)
-    local equipment = ext and ext._equipment
-
-    for _, slot in pairs(equipment or {}) do
-        live_visual.prune_dead_slot_references(slot)
-    end
-
-    return false
-end
-
-live_visual.clear_managed_visibility_slots = function(ext)
-    local equipment = ext and ext._equipment
-    local cleared = false
-
-    for slot_name in pairs(live_visual.managed_slots) do
-        local slot = equipment and equipment[slot_name]
-
-        if slot and (slot.item ~= nil
-            or slot.unit_3p ~= nil
-            or slot.unit_1p ~= nil
-            or slot.item_unit_3p ~= nil
-            or slot.item_unit_1p ~= nil) then
-            clear_equipment_slot_record(ext, slot_name)
-            cleared = true
-        end
-    end
-
-    if cleared then
-        live_visual.plan = nil
-    end
-
-    return cleared
 end
 
 local HEAD_MASK_SOURCE_SLOTS = { "slot_gear_head", "slot_body_face" }
@@ -3924,7 +2425,7 @@ live_visual.equipment_has_generated_items = function(equipment)
     return false
 end
 
--- Native visibility updates reset opacity hiding and hidden meshes.
+-- The pass shows everything again, redo opacity and hidden meshes
 local function apply_equipment_visual_state(equipment)
     for _, slot in pairs(equipment or {}) do
         local item = type(slot) == "table" and slot.item
@@ -3944,6 +2445,7 @@ local function apply_equipment_visual_state(equipment)
     end
 end
 
+-- Darktide: scripts/extension_systems/visual_loadout/equipment_component.lua
 hook_method(EquipmentComponent, "update_item_visibility", function(
         func,
         equipment,
@@ -3952,6 +2454,9 @@ hook_method(EquipmentComponent, "update_item_visibility", function(
         unit_1p,
         first_person_mode,
         item_definitions)
+    -- Run the games visibility pass with the look swapped in
+    equipment = OVERLAY.effective_equipment(equipment, unit_3p, first_person_mode) or equipment
+
     func(
         equipment,
         wielded_slot,
@@ -3961,7 +2466,6 @@ hook_method(EquipmentComponent, "update_item_visibility", function(
         item_definitions
     )
 
-    -- Only generated items carry mask and opacity state.
     if not live_visual.equipment_has_generated_items(equipment) then
         return
     end
@@ -3976,374 +2480,23 @@ hook_method(EquipmentComponent, "update_item_visibility", function(
     apply_equipment_visual_state(equipment)
 end)
 
+-- Darktide: scripts/extension_systems/visual_loadout/player_unit_visual_loadout_extension.lua
 hook_method(PlayerUnitVisualLoadoutExtension, "_update_item_visibility", function(func, self, first_person_mode)
-    local owner = live_visual.owners.for_unit(self._unit)
-
-    -- Vanilla characters skip the stale-unit guard entirely.
-    if not (owner and next(owner.managed_slots))
-        and not extra_slot_runtime.has_units()
-        and not live_visual.equipment_has_generated_items(self._equipment) then
-        return func(self, first_person_mode)
-    end
-
-    live_visual.sanitize_visibility_equipment(self)
-
-    local ok, visibility_error = pcall(func, self, first_person_mode)
-
-    if not ok then
-        live_visual.sanitize_visibility_equipment(self)
-
-        -- Only the owner of this unit may clear its slot records and packages.
-        if owner then
-            live_visual.owners.run(owner, live_visual.clear_managed_visibility_slots, self)
-            live_visual.owners.run(owner, schedule_reapply)
-        end
-
-        if live_visual.visibility_fault ~= tostring(visibility_error) then
-            live_visual.visibility_fault = tostring(visibility_error)
-            mod:error("Visibility update recovered from stale equipment units: %s", live_visual.visibility_fault)
-        end
-
-        return
-    end
-
-    live_visual.visibility_fault = nil
-
-    local active_first_person = type(first_person_mode) == "boolean"
-        and first_person_mode or self._is_in_first_person_mode == true
+    func(self, first_person_mode)
 
     if self._is_local_unit == true and util.safe_unit_alive(self._unit) then
+        local active_first_person = type(first_person_mode) == "boolean"
+            and first_person_mode or self._is_in_first_person_mode == true
+
         pcall(extra_slot_runtime.set_first_person_mode, self._unit, active_first_person)
     end
 end)
 
--- Server correction
-
-local NIL_INVENTORY_VALUE = {}
-
--- Let vanilla correct only the slots replaced by the mod.
+-- Dialogue and emotes need the face that is actually shown
 -- Darktide: scripts/extension_systems/visual_loadout/player_unit_visual_loadout_extension.lua
-hook_method(PlayerUnitVisualLoadoutExtension, "server_correction_occurred", function(func, self, unit, from_frame)
-    if self._is_local_unit ~= true or self._unit ~= unit or unit ~= _bound_player_unit then
-        return func(self, unit, from_frame)
-    end
-
-    if not next(live_visual.managed_slots) then
-        return func(self, unit, from_frame)
-    end
-
-    live_visual.sanitize_visibility_equipment(self)
-
-    local inventory = self._inventory_component
-    local equipment = self._equipment
-
-    if not inventory or not equipment then
-        return func(self, unit, from_frame)
-    end
-
-    local saved_inventory = {}
-    local unequipped_slot = self.UNEQUIPPED_SLOT or "not_equipped"
-
-    for slot_name in pairs(live_visual.managed_slots) do
-        normalize_empty_equipment_slot(self, slot_name)
-
-        if valid_look_slot(slot_name) then
-            local slot = equipment[slot_name]
-            local item = slot and slot.equipped and slot.item
-            local local_item_name = item and item.name or unequipped_slot
-            local server_item_name = inventory[slot_name]
-
-            -- Shield managed visual slots, then restore the network value.
-            if server_item_name ~= local_item_name then
-                saved_inventory[slot_name] = server_item_name == nil
-                    and NIL_INVENTORY_VALUE or server_item_name
-                inventory[slot_name] = local_item_name
-            end
-        end
-    end
-
-    -- This has to run on the error path too.
-    local results = { pcall(func, self, unit, from_frame) }
-    local ok = table.remove(results, 1)
-
-    for slot_name, saved in pairs(saved_inventory) do
-        inventory[slot_name] = saved == NIL_INVENTORY_VALUE and nil or saved
-    end
-
-    prediction.clear_handler(self._mispredict_package_handler)
-
-    if not ok then
-        mod:error("Server correction failed: %s", tostring(results[1]))
-        return
-    end
-
-    return unpack(results)
+hook_method(PlayerUnitVisualLoadoutExtension, "unit_3p_from_slot", function(func, self, slot_name)
+    return OVERLAY.slot_unit_3p(self._unit, slot_name) or func(self, slot_name)
 end)
-
-local function slot_item(ext, slot_name)
-    local slot = ext and ext._equipment and ext._equipment[slot_name]
-
-    return slot and slot.item or nil
-end
-
--- NPC Look can intentionally leave a managed visual slot empty while the native
--- profile still contains an item for that slot. During a later profile sync,
--- Darktide calls the normal public unequip path, whose internal implementation
--- assumes slot.item is always present. Treat an already-empty managed slot as
--- an idempotent internal unequip. The public wrapper still updates the native
--- inventory component and sends its normal replication message.
--- Darktide: scripts/extension_systems/visual_loadout/player_unit_visual_loadout_extension.lua
-hook_method(PlayerUnitVisualLoadoutExtension, "_unequip_item_from_slot", function(
-        func,
-        self,
-        slot_name,
-        from_server_correction_occurred,
-        fixed_frame,
-        from_destroy)
-    if live_visual.owners.managed_slots_for(self)[slot_name] == true then
-        local slot = self._equipment and self._equipment[slot_name]
-
-        if type(slot) ~= "table" or type(slot.item) ~= "table" then
-            if type(slot) == "table" then
-                slot.equipped = false
-            end
-
-            return
-        end
-    end
-
-    return func(
-        self,
-        slot_name,
-        from_server_correction_occurred,
-        fixed_frame,
-        from_destroy
-    )
-end)
-
-local function unequip_slot(ext, slot_name, fixed_frame)
-    local normalized, normalize_error = normalize_empty_equipment_slot(ext, slot_name)
-
-    if not normalized then
-        return false, normalize_error
-    end
-
-    local slot = ext and ext._equipment and ext._equipment[slot_name]
-    local item = slot and slot.item
-
-    if not item then
-        return true
-    end
-
-    local prediction_marker = prediction.prepare_direct_unload(ext, slot_name, item)
-    local pending_before = prediction_marker
-        and prediction.pending_count(prediction_marker.handler, item) or 0
-
-    -- Capture generated descendants that vanilla may omit from its slot map.
-    local captured_units = item.npclook_generated == true and live_visual.capture_slot_units(slot) or nil
-    local unit_spawner = ext and ext._equipment_component and ext._equipment_component._unit_spawner
-
-    if captured_units then
-        live_visual.track_package_units(_live_package_loads[slot_name], captured_units, unit_spawner)
-    end
-
-    local ok, err = pcall(ext._unequip_item_from_slot, ext, slot_name, false, fixed_frame, false)
-    local pending_after = prediction_marker
-        and prediction.pending_count(prediction_marker.handler, item) or pending_before
-
-    if prediction_marker and pending_after > pending_before then
-        prediction.commit_direct_unload(prediction_marker)
-    end
-
-    if captured_units then
-        -- Wait for pending deletion, then remove only surviving units.
-        live_visual.flush_slot_unit_spawner(unit_spawner)
-        live_visual.discard_captured_slot_units(ext, captured_units)
-        live_visual.flush_slot_unit_spawner(unit_spawner)
-    end
-
-    if not ok then
-        mod:error("Unequip failed for %s: %s", tostring(slot_name), tostring(err))
-    end
-
-    return ok, err
-end
-
-local function equip_slot(ext, slot_name, item, fixed_t, package_record)
-    if not item then
-        return false, loc("error_item_nil")
-    end
-
-    local equipment_component = ext._equipment_component
-    local generated = item.npclook_generated == true
-    local handler = not generated and ext._mispredict_package_handler or nil
-    local capture = handler and prediction.begin_capture(handler, item) or nil
-    local extension_manager = generated and equipment_component and equipment_component._extension_manager
-    local from_ui_profile_spawner = generated and equipment_component and equipment_component._from_ui_profile_spawner
-
-    if generated and equipment_component then
-        equipment_component._extension_manager = nil
-        equipment_component._from_ui_profile_spawner = true
-    end
-
-    local ok, err = pcall(ext._equip_item_to_slot, ext, item, slot_name, fixed_t, nil, false)
-
-    if generated and equipment_component then
-        equipment_component._extension_manager = extension_manager
-        equipment_component._from_ui_profile_spawner = from_ui_profile_spawner
-    end
-
-    if ok and handler then
-        prediction.set_slot_record(handler, slot_name, prediction.finish_capture(handler, capture))
-    elseif not ok then
-        clear_equipment_slot_record(ext, slot_name, {
-            package_record = package_record,
-            preserve_live_packages = true,
-        })
-        mod:error("Equip failed for %s: %s", tostring(slot_name), tostring(err))
-    end
-
-    return ok, err
-end
-
--- Live slots start from the profile visual loadout.
-local function snapshot_slot(player_unit, slot_name)
-    if _originals[slot_name] ~= nil then
-        return
-    end
-
-    local ext = visual_extension(player_unit)
-
-    if not ext then
-        return
-    end
-
-    _originals[slot_name] = slot_item(ext, slot_name) or false
-end
-
-live_visual.items_match = function(current, desired, visual_signature)
-    if rawequal(current, desired) then
-        return true
-    elseif not current or not desired or current.name ~= desired.name then
-        return false
-    elseif desired.npclook_generated == true then
-        return current.npclook_generated == true
-            and current.npclook_visual_signature == visual_signature
-    elseif current.npclook_generated == true then
-        return false
-    end
-
-    return live_visual.item_signature(current) == visual_signature
-end
-
-live_visual.swap_slot = function(ext, slot_name, item, visual_signature, fixed_frame, fixed_t)
-    local current = slot_item(ext, slot_name)
-    local generated = item and item.npclook_generated == true
-
-    if live_visual.items_match(current, item, visual_signature) then
-        local package_record = _live_package_loads[slot_name]
-        local package_record_matches = package_record
-            and package_record.package_manager == Managers.package
-            and package_record.item_name == item.name
-            and package_record.visual_signature == visual_signature
-
-        if generated and not package_record_matches then
-            local replacement_record, package_error, packages_loading = acquire_live_item_packages(
-                ext,
-                slot_name,
-                item,
-                visual_signature
-            )
-
-            if not replacement_record then
-                return false, false, package_error, packages_loading
-            end
-
-            if package_record then
-                live_visual.transfer_package_units(package_record, replacement_record)
-            else
-                live_visual.track_slot_package_units(replacement_record, ext, slot_name)
-            end
-
-            retire_live_slot_packages(slot_name)
-            _live_package_loads[slot_name] = replacement_record
-        elseif not generated and package_record then
-            retire_live_slot_packages(slot_name)
-        end
-
-        if generated then
-            live_visual.track_slot_package_units(_live_package_loads[slot_name], ext, slot_name)
-
-            local equipment = ext._equipment
-            EXTRA_SLOTS.apply_custom_materials_to_slot(equipment and equipment[slot_name], item)
-            live_visual.apply_slot_meshes(equipment and equipment[slot_name], item)
-        end
-
-        return true, false
-    end
-
-    if not item then
-        return false, false, loc("error_item_nil")
-    end
-
-    local previous_package_record = _live_package_loads[slot_name]
-
-    -- The player's own items load here too; the game does not always still hold their packages
-    local acquire = generated and acquire_live_item_packages or live_visual.acquire_native_item_packages
-    local package_record, package_error, packages_loading = acquire(ext, slot_name, item, visual_signature)
-
-    if not package_record then
-        return false, false, package_error, packages_loading
-    end
-
-    local unequip_ok, unequip_error = unequip_slot(ext, slot_name, fixed_frame)
-
-    if not unequip_ok then
-        if package_record and not release_live_package_record(package_record) then
-            queue_live_package_release(package_record, 0)
-        end
-
-        return false, false, unequip_error
-    end
-
-    local equip_ok, equip_error = equip_slot(ext, slot_name, item, fixed_t, package_record)
-
-    if equip_ok then
-        if package_record then
-            live_visual.track_slot_package_units(package_record, ext, slot_name)
-        end
-
-        retire_live_slot_packages(slot_name)
-
-        if package_record then
-            _live_package_loads[slot_name] = package_record
-        end
-
-        if generated then
-            local equipment = ext._equipment
-            EXTRA_SLOTS.apply_custom_materials_to_slot(equipment and equipment[slot_name], item)
-            live_visual.apply_slot_meshes(equipment and equipment[slot_name], item)
-        end
-    else
-        if package_record then
-            queue_live_package_release(package_record)
-        end
-
-        if current then
-            local rollback_ok = equip_slot(ext, slot_name, current, fixed_t, previous_package_record)
-
-            if rollback_ok then
-                live_visual.track_slot_package_units(previous_package_record, ext, slot_name)
-            else
-                clear_equipment_slot_record(ext, slot_name)
-            end
-        else
-            clear_equipment_slot_record(ext, slot_name)
-        end
-    end
-
-    return equip_ok, true, equip_error
-end
 
 live_visual.ordered_slots = function(reverse)
     local ordered = {}
@@ -4655,20 +2808,26 @@ live_visual.build_plan = function(player)
         end
     end
 
-    local previous_plan = live_visual.plan
-
-    if previous_plan then
-        for slot_name in pairs(live_visual.managed_slots) do
-            if previous_plan.original_signatures[slot_name] ~= plan.original_signatures[slot_name] then
-                _originals[slot_name] = plan.original[slot_name] or false
-            end
-        end
-    end
-
     live_visual.plan = plan
     live_visual.plan_signature = signature
 
     return plan
+end
+
+-- Raw unit overlays go through the extra slots
+live_visual.look_slots = function(plan)
+    local desired = {}
+    local hidden = {}
+
+    for slot_name in pairs(plan.affected) do
+        hidden[slot_name] = true
+
+        if plan.desired[slot_name] and not plan.overlay_slots[slot_name] then
+            desired[slot_name] = plan.desired[slot_name]
+        end
+    end
+
+    return desired, hidden
 end
 
 live_visual.equip_all = function(player, owner)
@@ -4679,11 +2838,7 @@ live_visual.equip_all = function(player, owner)
         return false, 0, 0, loc("error_visual_extension_missing")
     end
 
-    live_visual.sanitize_visibility_equipment(ext)
-
-    local cache = item_cache()
-
-    if not cache then
+    if not item_cache() then
         return false, 0, 0, loc("error_master_cache_not_ready")
     end
 
@@ -4706,10 +2861,7 @@ live_visual.equip_all = function(player, owner)
             live_visual.owners.by_unit[player_unit] = owner
         end
     elseif _bound_player_unit ~= player_unit then
-        extra_slot_runtime.clear(0)
-        retire_all_live_slot_packages()
-        table.clear(_originals)
-        table.clear(live_visual.managed_slots)
+        extra_slot_runtime.clear()
         live_visual.plan = nil
         live_visual.plan_signature = nil
         _bound_player_unit = player_unit
@@ -4721,123 +2873,8 @@ live_visual.equip_all = function(player, owner)
         return false, 0, 1, plan_error
     end
 
-    if profile_package_sync_pending(player, ext, plan) then
-        if not owner then
-            _live_profile_sync_waiting = true
-        end
-
-        return false, 0, 0, loc("error_local_visual_not_ready"), true
-    end
-
-    if not owner then
-        _live_profile_sync_waiting = false
-    end
-
-    for slot_name in pairs(plan.affected) do
-        live_visual.managed_slots[slot_name] = true
-    end
-
-    local fixed_frame, fixed_t = fixed_frame_values(ext)
-    local equipped_count = 0
-    local failed_count = 0
-    local first_error
-    local loading_error
-    local packages_loading = false
-    local remove_order = live_visual.ordered_slots(true)
-
-    for i = 1, #remove_order do
-        local slot_name = remove_order[i]
-
-        if live_visual.managed_slots[slot_name] then
-            snapshot_slot(player_unit, slot_name)
-
-            if not plan.desired[slot_name] then
-                local current = slot_item(ext, slot_name)
-                local ok, err = unequip_slot(ext, slot_name, fixed_frame)
-
-                if not ok then
-                    failed_count = failed_count + 1
-                    first_error = first_error or string.format("%s: %s", slot_name, tostring(err))
-                else
-                    retire_live_slot_packages(slot_name)
-
-                    if current then
-                        equipped_count = equipped_count + 1
-                    end
-                end
-            end
-        end
-    end
-
-    local equip_order = live_visual.ordered_slots(false)
-
-    for i = 1, #equip_order do
-        local slot_name = equip_order[i]
-
-        if live_visual.managed_slots[slot_name] then
-            local desired_item = plan.desired[slot_name]
-
-            if desired_item then
-                snapshot_slot(player_unit, slot_name)
-                normalize_empty_equipment_slot(ext, slot_name)
-
-                local target_item = desired_item
-                local target_signature = plan.desired_signatures[slot_name]
-                local original_item = _originals[slot_name]
-
-                if not plan.affected[slot_name]
-                    and original_item
-                    and original_item ~= false
-                    and live_visual.item_signature(original_item) == target_signature then
-                    target_item = original_item
-                end
-
-                local ok, changed, err, slot_packages_loading = live_visual.swap_slot(
-                    ext,
-                    slot_name,
-                    target_item,
-                    target_signature,
-                    fixed_frame,
-                    fixed_t
-                )
-
-                if ok then
-                    if changed then
-                        equipped_count = equipped_count + 1
-                    end
-                elseif slot_packages_loading then
-                    packages_loading = true
-                    loading_error = loading_error or string.format("%s: %s", slot_name, tostring(err))
-                else
-                    failed_count = failed_count + 1
-                    first_error = first_error or string.format("%s: %s", slot_name, tostring(err))
-                end
-            end
-        end
-    end
-
-    if failed_count == 0 and not packages_loading then
-        local force_visibility = ext.force_update_item_visibility
-
-        if type(force_visibility) == "function" then
-            pcall(force_visibility, ext)
-        end
-
-        for slot_name in pairs(live_visual.managed_slots) do
-            if not plan.affected[slot_name] then
-                local current = slot_item(ext, slot_name)
-                local desired_item = plan.desired[slot_name]
-                local desired_signature = plan.desired_signatures[slot_name]
-
-                if (not desired_item and not current) or live_visual.items_match(current, desired_item, desired_signature) then
-                    live_visual.managed_slots[slot_name] = nil
-                    _originals[slot_name] = nil
-                    retire_live_slot_packages(slot_name)
-                end
-            end
-        end
-    end
-
+    local desired, hidden = live_visual.look_slots(plan)
+    local slots_ok, equipped_count, failed_count, first_error, packages_loading = OVERLAY.sync(ext, desired, hidden)
     local extra_slots_ok, extra_slots_spawned, extra_slots_failed, extra_slots_error, extra_slots_loading = extra_slot_runtime.sync(
         player_unit,
         ext,
@@ -4852,20 +2889,20 @@ live_visual.equip_all = function(player, owner)
         _look_state.meshes,
         owner
     )
+
     equipped_count = equipped_count + extra_slots_spawned
     failed_count = failed_count + extra_slots_failed
     packages_loading = packages_loading or extra_slots_loading
 
-    -- A slot that is only loading must not hide the slot that actually failed.
+    -- Dont let a slot that is still loading hide the one that failed
     if (tonumber(extra_slots_failed) or 0) > 0 or not extra_slots_ok and not extra_slots_loading then
         first_error = first_error or extra_slots_error
-    else
-        loading_error = loading_error or extra_slots_error
+    elseif not first_error then
+        first_error = extra_slots_error
     end
 
-    first_error = first_error or loading_error
-
-    return failed_count == 0 and not packages_loading and extra_slots_ok, equipped_count, failed_count, first_error, packages_loading
+    return slots_ok and extra_slots_ok and failed_count == 0 and not packages_loading,
+        equipped_count, failed_count, first_error, packages_loading
 end
 
 live_visual.matches = function(player)
@@ -4875,32 +2912,18 @@ live_visual.matches = function(player)
         return false, loc("error_visual_extension_missing")
     end
 
-    live_visual.sanitize_visibility_equipment(ext)
-
     local plan, plan_error = live_visual.build_plan(player)
 
     if not plan then
         return false, plan_error
     end
 
-    local slots = live_visual.ordered_slots(false)
+    local desired, hidden = live_visual.look_slots(plan)
+    local slots_match, slot_name = OVERLAY.matches(ext, desired, hidden)
 
-    for i = 1, #slots do
-        local slot_name = slots[i]
-
-        if plan.affected[slot_name] or live_visual.managed_slots[slot_name] then
-            local current = slot_item(ext, slot_name)
-            local desired_item = plan.desired[slot_name]
-            local desired_signature = plan.desired_signatures[slot_name]
-
-            if desired_item then
-                if not live_visual.items_match(current, desired_item, desired_signature) then
-                    return false, loc("error_expected_item", slot_name, desired_item.name)
-                end
-            elseif current then
-                return false, loc("error_should_empty", slot_name)
-            end
-        end
+    if not slots_match then
+        return false, desired[slot_name] and loc("error_expected_item", slot_name, desired[slot_name].name)
+            or loc("error_should_empty", slot_name)
     end
 
     local extra_slots_match, extra_slots_error = extra_slot_runtime.matches(
@@ -4922,112 +2945,12 @@ live_visual.matches = function(player)
     return true
 end
 
-local function restore_slots(player, requested_slots)
-    local player_unit = safe_player_unit(player)
-    local ext = visual_extension(player_unit)
-
-    if not ext then
-        return false
-    end
-
-    local package_records = {}
-    local packages_ready = true
-
-    -- Load the original items' packages first; the game does not always still hold them
-    for slot_name in pairs(requested_slots) do
-        local original_item = _originals[slot_name]
-
-        if type(original_item) == "table" and original_item.npclook_generated ~= true then
-            local record = live_visual.acquire_native_item_packages(
-                ext,
-                slot_name,
-                original_item,
-                live_visual.item_signature(original_item)
-            )
-
-            if record then
-                package_records[slot_name] = record
-            else
-                packages_ready = false
-            end
-        end
-    end
-
-    if not packages_ready then
-        -- Loaded records wait in the pending list for the next attempt
-        for slot_name, record in pairs(package_records) do
-            _pending_live_package_loads[slot_name] = record
-        end
-
-        return false
-    end
-
-    local fixed_frame, fixed_t = fixed_frame_values(ext)
-    local removed = {}
-    local restored = true
-    local remove_order = live_visual.ordered_slots(true)
-
-    for i = 1, #remove_order do
-        local slot_name = remove_order[i]
-
-        if requested_slots[slot_name] and _originals[slot_name] ~= nil then
-            local ok = unequip_slot(ext, slot_name, fixed_frame)
-            removed[slot_name] = ok == true
-            restored = restored and ok == true
-
-            if ok then
-                retire_live_slot_packages(slot_name)
-            end
-        end
-    end
-
-    local equip_order = live_visual.ordered_slots(false)
-
-    for i = 1, #equip_order do
-        local slot_name = equip_order[i]
-        local original_item = _originals[slot_name]
-
-        if removed[slot_name] and original_item and original_item ~= false then
-            restored = equip_slot(ext, slot_name, original_item, fixed_t) and restored
-        end
-    end
-
-    -- The equipped items hold their own package references from here on
-    for _, record in pairs(package_records) do
-        queue_live_package_release(record)
-    end
-
-    if restored then
-        for slot_name in pairs(requested_slots) do
-            _originals[slot_name] = nil
-            live_visual.managed_slots[slot_name] = nil
-        end
-
-        live_visual.plan = nil
-        live_visual.plan_signature = nil
-    end
-
-    return restored
-end
-
+-- Profile was never touched, nothing to wait for
 local function direct_restore(player)
-    local requested_slots = {}
-
-    extra_slot_runtime.clear(0)
-
-    for slot_name in pairs(_originals) do
-        requested_slots[slot_name] = true
-    end
-
-    local restored = restore_slots(player, requested_slots)
-
-    if restored then
-        table.clear(live_visual.managed_slots)
-        live_visual.plan = nil
-        live_visual.plan_signature = nil
-    end
-
-    return restored
+    extra_slot_runtime.clear()
+    OVERLAY.clear(safe_player_unit(player), true)
+    live_visual.plan = nil
+    live_visual.plan_signature = nil
 end
 
 local function push_look()
@@ -5043,7 +2966,7 @@ local function push_look()
 
     if _raw_overlay_retry_requested and not packages_loading then
         _raw_overlay_retry_requested = false
-        extra_slot_runtime.clear(0)
+        extra_slot_runtime.clear()
         live_visual.plan = nil
         live_visual.plan_signature = nil
         ok, equipped, failed, err, packages_loading = live_visual.equip_all(player)
@@ -5075,7 +2998,7 @@ local function invalidate_live_plan()
 end
 
 local function repair_visual_after_state_restore()
-    extra_slot_runtime.clear(0)
+    extra_slot_runtime.clear()
     invalidate_live_plan()
 
     local ok, err, loading = push_look()
@@ -5092,10 +3015,6 @@ end
 function live_visual.owners.bind(owner)
     live_visual.owners.current = owner
     _look_state = owner.state
-    _originals = owner.originals
-    _live_package_loads = owner.package_loads
-    _pending_live_package_loads = owner.pending_package_loads
-    live_visual.managed_slots = owner.managed_slots
     live_visual.plan = owner.plan
     live_visual.plan_signature = owner.plan_signature
 end
@@ -5104,7 +3023,7 @@ function live_visual.owners.pack(...)
     return { n = select("#", ...), ... }
 end
 
--- Runs fn with the owner's look and live tables bound and returns its pcall results.
+-- The owners look and plan are swapped in while fn runs
 function live_visual.owners.run(owner, fn, ...)
     local owners = live_visual.owners
     local previous = owners.current
@@ -5124,59 +3043,19 @@ function live_visual.owners.run(owner, fn, ...)
     return unpack(results, 1, results.n)
 end
 
-function live_visual.owners.for_unit(unit)
-    if unit == nil then
-        return nil
-    elseif unit == _bound_player_unit then
-        return live_visual.owners.local_record
-    end
-
-    return live_visual.owners.by_unit[unit]
-end
-
-live_visual.owners.no_slots = {}
-
-function live_visual.owners.managed_slots_for(ext)
-    local owner = ext and live_visual.owners.for_unit(ext._unit)
-
-    return owner and owner.managed_slots or live_visual.owners.no_slots
-end
-
--- Runs inside the owner scope.
+-- Runs inside the owner scope
 function live_visual.owners.unbind_unit(owner)
     if owner.unit ~= nil then
         live_visual.owners.by_unit[owner.unit] = nil
+        OVERLAY.clear(owner.unit, util.safe_unit_alive(owner.unit))
     end
 
-    extra_slot_runtime.clear_context(owner, 0)
-    retire_all_live_slot_packages()
-    table.clear(_originals)
-    table.clear(live_visual.managed_slots)
+    extra_slot_runtime.clear_context(owner)
     live_visual.plan = nil
     live_visual.plan_signature = nil
     owner.unit = nil
 end
 
--- Runs inside the owner scope.
-function live_visual.owners.restore_owner(owner)
-    local requested_slots = {}
-
-    extra_slot_runtime.clear_context(owner, 0)
-
-    for slot_name in pairs(_originals) do
-        requested_slots[slot_name] = true
-    end
-
-    local restored = restore_slots(owner.player, requested_slots)
-    local ext = visual_extension(owner.unit)
-    local force_visibility = ext and ext.force_update_item_visibility
-
-    if type(force_visibility) == "function" then
-        pcall(force_visibility, ext)
-    end
-
-    return restored
-end
 
 -- Deep copy of a look state; companion mods never get the live tables.
 function live_visual.owners.snapshot_state(state)
@@ -5270,7 +3149,7 @@ function live_visual.owners.equip(owner)
 
     if call_ok and _raw_overlay_retry_requested and not packages_loading then
         _raw_overlay_retry_requested = false
-        extra_slot_runtime.clear_context(owner, 0)
+        extra_slot_runtime.clear_context(owner)
         owner.plan = nil
         owner.plan_signature = nil
         call_ok, ok, equipped, failed, err, packages_loading = live_visual.owners.run(
@@ -5324,10 +3203,6 @@ function live_visual.owners.apply(player, state)
     if not owner then
         owner = {
             player = player,
-            originals = {},
-            package_loads = {},
-            pending_package_loads = {},
-            managed_slots = {},
             retry = util.new_retry(0.1, 1, 1.6),
         }
         owners.by_player[player] = owner
@@ -5340,7 +3215,7 @@ function live_visual.owners.apply(player, state)
     return owners.equip(owner)
 end
 
-function live_visual.owners.clear(player, restore)
+function live_visual.owners.clear(player)
     local owners = live_visual.owners
     local owner = player and owners.by_player[player]
 
@@ -5348,36 +3223,18 @@ function live_visual.owners.clear(player, restore)
         return true
     end
 
-    local restored = true
-
-    if restore ~= false and util.safe_unit_alive(owner.unit) then
-        local call_ok, result = owners.run(owner, owners.restore_owner, owner)
-        restored = call_ok and result == true
-
-        -- Keep the originals and retry with an empty look until the bot is vanilla again.
-        if not restored then
-            owner.state = owners.normalize_state(nil)
-            owner.reapply_pending = true
-            util.reset_retry(owner.retry)
-
-            return false
-        end
-    end
-
     owners.run(owner, owners.unbind_unit, owner)
     owners.by_player[player] = nil
     owners.count = math.max(owners.count - 1, 0)
 
-    return restored
+    return true
 end
 
-function live_visual.owners.release_all(restore)
+function live_visual.owners.release_all()
     local players = table.keys(live_visual.owners.by_player)
 
     for i = 1, #players do
-        if not live_visual.owners.clear(players[i], restore) then
-            live_visual.owners.clear(players[i], false)
-        end
+        live_visual.owners.clear(players[i])
     end
 
     table.clear(live_visual.owners.by_player)
@@ -5418,7 +3275,7 @@ function live_visual.owners.update(dt)
 
             if ok and not live_visual.has_look_state(owner.state) then
                 -- A cleared bot is vanilla again.
-                owners.clear(player, false)
+                owners.clear(player)
             elseif not ok and not packages_loading and util.record_attempt(owner.retry) then
                 owner.reapply_pending = false
             end
@@ -6810,8 +4667,7 @@ local function current_look_state(player)
             local item_name = _look_state.applied[slot_name]
 
             if type(item_name) ~= "string" then
-                local live_item = slot_item(ext, slot_name)
-                    or profile_loadout[slot_name]
+                local live_item = profile_loadout[slot_name]
                     or visual_loadout[slot_name]
 
                 if type(live_item) == "string" then
@@ -6978,7 +4834,6 @@ end
 
 live_visual.clear_look_intent = function()
     _reapply_pending = false
-    _vanilla_restore_pending = false
     _raw_overlay_retry_requested = false
     util.reset_retry(_reapply_retry)
     util.report_once(_runtime_reports, "reapply", nil)
@@ -6996,7 +4851,7 @@ live_visual.clear_look_intent = function()
     _look_state.character_id = nil
     _look_state.breed = nil
 
-    extra_slot_runtime.clear(0)
+    extra_slot_runtime.clear()
     invalidate_live_plan()
 end
 
@@ -7015,8 +4870,6 @@ live_visual.clear_foreign_active_look = function(character_id)
     end
 
     live_visual.clear_look_intent()
-    table.clear(_originals)
-    table.clear(live_visual.managed_slots)
 
     if type(mod.npclook_refresh_portrait) == "function" then
         pcall(mod.npclook_refresh_portrait)
@@ -7257,9 +5110,7 @@ local LOADOUT_PRESETS = mod:io_dofile(
         local player = get_local_player()
         local player_unit = player and safe_player_unit(player)
 
-        return _game_state_ready
-            and not _startup_cleanup_pending
-            and visual_extension(player_unit) ~= nil
+        return _game_state_ready and visual_extension(player_unit) ~= nil
     end,
     invalidate_profile_cache = live_visual.invalidate_loadout_profile_cache,
     hook_method = hook_method,
@@ -7402,7 +5253,7 @@ local function clear_ui_profile_extra_slots(profile_spawner)
         return
     end
 
-    extra_slot_runtime.clear_context(profile_spawner, 0)
+    extra_slot_runtime.clear_context(profile_spawner)
 
     local unit_spawner = profile_spawner._unit_spawner
     local flush = unit_spawner and (
@@ -7475,12 +5326,12 @@ live_visual.sync_ui_profile_extra_slots = function(profile_spawner)
         profile_spawner._npclook_extra_slots_ready = true
 
         if extra_slot_runtime.has_context(profile_spawner) then
-            extra_slot_runtime.clear_context(profile_spawner, 0)
+            extra_slot_runtime.clear_context(profile_spawner)
         end
 
         return
     elseif character_hidden or not util.safe_unit_alive(unit_3p) then
-        extra_slot_runtime.clear_context(profile_spawner, 0)
+        extra_slot_runtime.clear_context(profile_spawner)
         profile_spawner._npclook_extra_slots_ready = true
         return
     elseif spawn_data.is_ready ~= true then
@@ -7551,7 +5402,7 @@ local function prepare_npclook_unit_deletion(unit_spawner, unit)
         return true
     end
 
-    extra_slot_runtime.clear_parent_unit(unit, 0)
+    extra_slot_runtime.clear_parent_unit(unit)
 
     return extra_slot_runtime.prepare_unit_deletion(unit_spawner, unit) ~= false
 end
@@ -7583,17 +5434,9 @@ hook_method(UnitSpawnerManager, "spawn_unit", function(func, self, unit_or_item_
     return unit
 end)
 
--- Clear linked extras at the live-unit deletion boundary.
+-- Look pieces and extras go before the character
 hook_method(UnitSpawnerManager, "mark_for_deletion", function(func, self, unit, ...)
-    if unit == _bound_player_unit then
-        live_visual.refresh_active_package_units(visual_extension(unit))
-    elseif live_visual.owners.by_unit[unit] then
-        live_visual.owners.run(
-            live_visual.owners.by_unit[unit],
-            live_visual.refresh_active_package_units,
-            visual_extension(unit)
-        )
-    end
+    OVERLAY.clear(unit, false)
 
     if not prepare_npclook_unit_deletion(self, unit) then
         return
@@ -7728,31 +5571,19 @@ mod.npclook_reset_all = function()
         return false, loc("error_no_local_player")
     end
 
-    -- Loadout pins reconcile on every sync; a vanilla character needs no restore or portrait refresh.
+    -- Pins reconcile on sync, vanilla needs no restore
     if not live_visual.has_active_look()
-        and next(_originals) == nil
-        and next(live_visual.managed_slots) == nil
-        and not _vanilla_restore_pending
         and not _reapply_pending
+        and not OVERLAY.for_unit(safe_player_unit(player))
         and not extra_slot_runtime.has_units() then
         return true, nil, false
     end
 
     live_visual.clear_look_intent()
-
-    local restored = direct_restore(player)
-
-    if not restored then
-        _vanilla_restore_pending = true
-        util.reset_retry(_reapply_retry)
-    else
-        table.clear(_originals)
-        table.clear(live_visual.managed_slots)
-    end
-
+    direct_restore(player)
     mod.npclook_refresh_portrait()
 
-    return true, restored and nil or loc("error_slot_restore"), true
+    return true, nil, true
 end
 
 -- Studio session
@@ -9379,33 +7210,6 @@ mod.npclook_commit_state = function(applied, suppressed, empty, extra_anchors, e
     local previous_masks = MASKS.clone_map(_look_state.masks)
     local previous_opacity = util.clone_opacity_map(_look_state.opacity)
     local previous_meshes = MESHES.clone_map(_look_state.meshes)
-
-    local removed_slots = {}
-
-    for slot_name in pairs(_originals) do
-        if not validated_applied[slot_name] and not validated_suppressed[slot_name]
-            and not validated_empty[slot_name] and not validated_materials[slot_name]
-            and not validated_masks[slot_name]
-            and not validated_meshes[slot_name]
-            and util.normalize_opacity(validated_opacity[slot_name]) == util.opacity_default then
-            removed_slots[slot_name] = true
-        end
-    end
-
-    if next(removed_slots) and not restore_slots(player, removed_slots) then
-        restore_string_map(_look_state.applied, previous_applied)
-        restore_string_map(_look_state.suppressed, previous_suppressed)
-        restore_string_map(_look_state.empty, previous_empty)
-        restore_string_map(_look_state.extra_anchors, previous_extra_anchors)
-        EXTRA_SLOTS.restore_transforms(_look_state.extra_transforms, previous_extra_transforms, previous_extra_anchors)
-        EXTRA_SLOTS.restore_material_map(_look_state.materials, previous_materials)
-        _look_state.variants = RAW_UNITS.clone_variant_map(previous_variants)
-        _look_state.masks = MASKS.clone_map(previous_masks)
-        _look_state.opacity = util.clone_opacity_map(previous_opacity)
-        _look_state.meshes = MESHES.clone_map(previous_meshes)
-        repair_visual_after_state_restore()
-        return false, loc("error_restore_removed")
-    end
 
     restore_string_map(_look_state.applied, validated_applied)
     restore_string_map(_look_state.suppressed, validated_suppressed)
@@ -12324,108 +10128,18 @@ end)
 
 -- Lifecycle and reapply
 
--- The player unit is recreated between hub and mission.
+-- The player unit is recreated between hub and mission
 function INTERNAL.reset_unit_binding()
-    if util.safe_unit_alive(_bound_player_unit) then
-        live_visual.refresh_active_package_units(visual_extension(_bound_player_unit))
-    end
-
-    extra_slot_runtime.clear(0)
-    retire_all_live_slot_packages()
-    table.clear(_originals)
-    table.clear(live_visual.managed_slots)
+    OVERLAY.clear(_bound_player_unit, util.safe_unit_alive(_bound_player_unit))
+    extra_slot_runtime.clear()
     live_visual.plan = nil
     live_visual.plan_signature = nil
     _bound_player_unit = nil
 end
 
-function INTERNAL.cleanup_stale_npclook_visuals(player, player_unit)
-    local ext = visual_extension(player_unit)
-    local profile = safe_profile(player)
-
-    if not ext or not profile or not item_cache() then
-        return false, loc("error_local_visual_not_ready")
-    end
-
-    local equipment_component = ext._equipment_component
-    local unit_spawner = equipment_component and equipment_component._unit_spawner
-    local cleanup_children = extra_slot_runtime.cleanup_owned_parent_children
-
-    if type(cleanup_children) == "function" then
-        pcall(cleanup_children, player_unit, unit_spawner)
-        pcall(cleanup_children, ext._first_person_unit, unit_spawner)
-    end
-
-    local equipment = ext._equipment
-    local stale_slots = {}
-
-    if type(equipment) == "table" then
-        for slot_name, slot in pairs(equipment) do
-            if valid_look_slot(slot_name) and type(slot) == "table"
-                and type(slot.item) == "table" and slot.item.npclook_generated == true then
-                stale_slots[slot_name] = true
-            end
-        end
-    end
-
-    if next(stale_slots) == nil then
-        live_visual.flush_slot_unit_spawner(unit_spawner)
-        return true
-    end
-
-    local desired_loadout, loadout_error = live_visual.generate_loadout(profile.loadout or {})
-
-    if not desired_loadout then
-        return false, loadout_error
-    end
-
-    local fixed_frame, fixed_t = fixed_frame_values(ext)
-    local remove_order = live_visual.ordered_slots(true)
-
-    for i = 1, #remove_order do
-        local slot_name = remove_order[i]
-
-        if stale_slots[slot_name] then
-            local ok, err = unequip_slot(ext, slot_name, fixed_frame)
-
-            if not ok then
-                return false, err
-            end
-        end
-    end
-
-    live_visual.flush_slot_unit_spawner(unit_spawner)
-
-    local equip_order = live_visual.ordered_slots(false)
-
-    for i = 1, #equip_order do
-        local slot_name = equip_order[i]
-        local item = stale_slots[slot_name] and desired_loadout[slot_name]
-
-        if item then
-            local ok, err = equip_slot(ext, slot_name, item, fixed_t)
-
-            if not ok then
-                return false, err
-            end
-        end
-    end
-
-    live_visual.flush_slot_unit_spawner(unit_spawner)
-
-    if type(ext.force_update_item_visibility) == "function" then
-        pcall(ext.force_update_item_visibility, ext)
-    end
-
-    mod.npclook_refresh_portrait()
-
-    return true
-end
-
 function INTERNAL.reapply_failed(err)
     if util.record_attempt(_reapply_retry) then
         _reapply_pending = false
-        _vanilla_restore_pending = false
         mod:warning("Stopped reapplying the look after %d attempts: %s", util.RETRY_LIMIT, tostring(err or "unknown error"))
     end
 
@@ -12440,26 +10154,11 @@ function INTERNAL.run_reapply(player, player_unit)
         return INTERNAL.reapply_failed(loc("error_local_visual_not_ready"))
     end
 
-    if _vanilla_restore_pending then
-        local restored = direct_restore(player)
-
-        if restored then
-            _vanilla_restore_pending = false
-            table.clear(_originals)
-            table.clear(live_visual.managed_slots)
-            util.reset_retry(_reapply_retry)
-            util.report_once(_runtime_reports, "reapply", nil)
-            mod.npclook_refresh_portrait()
-            return true
-        end
-
-        return INTERNAL.reapply_failed(loc("error_slot_restore"))
-    end
-
     local ok, err, packages_loading = push_look()
 
+    -- Retry the sync once a lease finishes loading
     if packages_loading then
-        _reapply_pending = _live_profile_sync_waiting
+        _reapply_pending = false
         util.defer_retry(_reapply_retry)
         util.report_once(_runtime_reports, "reapply", nil)
         return true
@@ -12564,41 +10263,17 @@ mod.npclook_apply_active_look_to_player = function(player)
 end
 
 mod.npclook_clear_bot_look = function(player)
-    return live_visual.owners.clear(player, true)
+    return live_visual.owners.clear(player)
 end
 
 mod.update = function(dt)
     dt = math.max(tonumber(dt) or 0, 0)
-    update_live_package_releases()
 
-
-    if _startup_cleanup_pending and _game_state_ready then
-        _startup_cleanup_elapsed = _startup_cleanup_elapsed + dt
-
-        if _startup_cleanup_elapsed >= BINDING_POLL_INTERVAL then
-            _startup_cleanup_elapsed = 0
-            _startup_cleanup_attempts = _startup_cleanup_attempts + 1
-
-            local cleanup_player = get_local_player()
-            local cleanup_unit = cleanup_player and safe_player_unit(cleanup_player)
-
-            if cleanup_player and util.safe_unit_alive(cleanup_unit) then
-                local ok_cleanup = INTERNAL.cleanup_stale_npclook_visuals(cleanup_player, cleanup_unit)
-
-                if ok_cleanup then
-                    _startup_cleanup_pending = false
-                    _startup_cleanup_attempts = 0
-                end
-            end
-
-            if _startup_cleanup_pending
-                and _startup_cleanup_attempts >= STARTUP_CLEANUP_MAX_ATTEMPTS then
-                _startup_cleanup_pending = false
-                _startup_cleanup_attempts = 0
-                schedule_reapply()
-            end
-        end
+    if PACKAGES.update(dt) then
+        schedule_reapply()
     end
+
+    OVERLAY.prune()
 
     if not extra_slot_update_faulted and extra_slot_has_update_work then
         local ok_work, has_work = pcall(extra_slot_has_update_work)
@@ -12611,7 +10286,7 @@ mod.update = function(dt)
 
             if not ok_update then
                 extra_slot_update_faulted = true
-                pcall(extra_slot_runtime.clear, 0)
+                pcall(extra_slot_runtime.clear)
                 mod:error("Extra-slot maintenance failed and was disabled for this game state: %s", tostring(update_error))
             end
         end
@@ -12621,33 +10296,23 @@ mod.update = function(dt)
     live_visual.owners.update(dt)
 
     local active_look = live_visual.has_active_look()
-    local reapply_due = (_reapply_pending or _vanilla_restore_pending) and _game_state_ready
-        and not _startup_cleanup_pending
+    local reapply_due = _reapply_pending and _game_state_ready
         and gameplay_time_manager() ~= nil
         and util.retry_due(_reapply_retry, dt)
 
     if active_look then
-        _binding_poll_elapsed = _binding_poll_elapsed + math.max(dt, 0)
+        _binding_poll_elapsed = _binding_poll_elapsed + dt
     else
         _binding_poll_elapsed = 0
     end
 
     local player
     local player_unit
-    local binding_poll_due = active_look
-        and (_binding_poll_elapsed >= BINDING_POLL_INTERVAL or reapply_due)
 
-    if binding_poll_due then
+    if active_look and (_binding_poll_elapsed >= BINDING_POLL_INTERVAL or reapply_due) then
         _binding_poll_elapsed = 0
         player = get_local_player()
         player_unit = player and safe_player_unit(player)
-
-        _package_unit_refresh_elapsed = _package_unit_refresh_elapsed + BINDING_POLL_INTERVAL
-
-        if player_unit == _bound_player_unit and _package_unit_refresh_elapsed >= PACKAGE_UNIT_REFRESH_INTERVAL then
-            _package_unit_refresh_elapsed = 0
-            live_visual.refresh_active_package_units(visual_extension(player_unit))
-        end
 
         if player_unit ~= _bound_player_unit then
             INTERNAL.reset_unit_binding()
@@ -12677,23 +10342,14 @@ mod.on_game_state_changed = function(status, state_name)
 
     INTERNAL.finish_studio_session()
     _binding_poll_elapsed = 0
-    _startup_cleanup_elapsed = 0
-    _startup_cleanup_attempts = 0
 
-    -- StateGameplay exits after the local unit is already gone.
+    -- StateGameplay exits after the local unit is already gone
     if status == "exit" and state_name == "StateGameplay" then
         _game_state_ready = false
-        live_visual.owners.release_all(false)
+        live_visual.owners.release_all()
+        OVERLAY.prune()
 
-        if next(_look_state.applied)
-            or next(_look_state.suppressed)
-            or next(_look_state.empty)
-            or next(_look_state.extra_anchors)
-            or next(_look_state.materials)
-            or next(_look_state.variants)
-            or next(_look_state.masks)
-            or next(_look_state.meshes)
-            or next(_look_state.opacity) then
+        if live_visual.has_active_look() then
             _reapply_pending = true
         end
 
@@ -12712,25 +10368,15 @@ mod.on_game_state_changed = function(status, state_name)
 
     if _game_state_ready then
         extra_slot_update_faulted = false
-        _startup_cleanup_pending = true
-        _startup_cleanup_elapsed = 0
-        _startup_cleanup_attempts = 0
         util.reset_retry(_reapply_retry)
         schedule_reapply()
     else
-        live_visual.owners.release_all(false)
+        live_visual.owners.release_all()
         extra_slot_runtime.release_all()
+        OVERLAY.clear(_bound_player_unit, false)
         _bound_player_unit = nil
 
-        if next(_look_state.applied)
-            or next(_look_state.suppressed)
-            or next(_look_state.empty)
-            or next(_look_state.extra_anchors)
-            or next(_look_state.materials)
-            or next(_look_state.variants)
-            or next(_look_state.masks)
-            or next(_look_state.meshes)
-            or next(_look_state.opacity) then
+        if live_visual.has_active_look() then
             _reapply_pending = true
         end
     end
@@ -12755,13 +10401,7 @@ function INTERNAL.shut_down()
         rawset(mod, "npclook_instance_generation", INSTANCE_GENERATION + 1)
     end
 
-    -- Stop package retirement before closing views, restoring base slots, or
-    -- destroying extra units. DMF continues running PackageManager during reload.
-    shutdown_step("begin extra-slot shutdown", extra_slot_runtime.begin_shutdown)
-
     local player = get_local_player()
-    local player_unit = player and safe_player_unit(player)
-    local ext = visual_extension(player_unit)
     local ui_manager = Managers.ui
 
     if ui_manager then
@@ -12769,32 +10409,17 @@ function INTERNAL.shut_down()
     end
 
     shutdown_step("finish Studio session", INTERNAL.finish_studio_session)
-    shutdown_step("restore companion looks", live_visual.owners.release_all, true)
+    shutdown_step("restore companion looks", live_visual.owners.release_all)
 
-    local has_extra_units = false
-
-    if type(extra_slot_runtime.has_units) == "function" then
-        local ok, result = pcall(extra_slot_runtime.has_units)
-        has_extra_units = ok and result == true
-    end
-
-    if player and (next(_originals) or has_extra_units) then
+    if player then
         shutdown_step("restore live look", direct_restore, player)
-    else
-        shutdown_step("clear extra slots", extra_slot_runtime.clear, 0)
     end
 
-    if ext then
-        shutdown_step("sanitize live visibility", live_visual.sanitize_visibility_equipment, ext)
-    end
-
+    shutdown_step("restore remaining looks", OVERLAY.clear_all, true)
     shutdown_step("stop loadout presets", LOADOUT_PRESETS.shutdown)
     shutdown_step("destroy extra-slot runtime", extra_slot_runtime.shutdown)
-    shutdown_step("release raw-unit tickets", RAW_UNITS.release_all)
-    shutdown_step("release live package records", release_all_live_package_records)
+    shutdown_step("clear raw units", RAW_UNITS.release_all)
 
-    table.clear(_originals)
-    table.clear(live_visual.managed_slots)
     live_visual.plan = nil
     live_visual.plan_signature = nil
     table.clear(_look_state.applied)
@@ -12816,11 +10441,7 @@ function INTERNAL.shut_down()
 
     _bound_player_unit = nil
     _reapply_pending = false
-    _vanilla_restore_pending = false
-    _live_profile_sync_waiting = false
     _binding_poll_elapsed = 0
-    _startup_cleanup_pending = false
-    _startup_cleanup_elapsed = 0
     util.reset_retry(_reapply_retry)
 end
 

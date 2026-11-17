@@ -57,7 +57,6 @@ local overlay_fallbacks = {}
 local state = {
     registry_revision = 0,
     definitions = {},
-    package_ready_by_resource = {},
     catalog_loaded = false,
     package_by_resource = {},
     metadata_cache = {},
@@ -102,11 +101,7 @@ local function resource_loader(force_refresh)
         elseif type(value.is_api_compatible) ~= "function"
             or not value.is_api_compatible(REQUIRED_RESOURCE_LOADER_API) then
             err = "ResourceLoader API v1 is required"
-        elseif type(value.visit) ~= "function"
-            or type(value.resolve) ~= "function"
-            or type(value.acquire_package) ~= "function"
-            or type(value.release) ~= "function"
-            or type(value.status) ~= "function" then
+        elseif type(value.visit) ~= "function" or type(value.resolve) ~= "function" then
             err = "ResourceLoader 1.1 or newer is required"
         else
             loader = value
@@ -587,25 +582,7 @@ function RawUnits.catalog_entries()
     return entries
 end
 
-function RawUnits.mark_package_ready(value, package_manager)
-    local resource = resource_from(value)
-    if valid_resource(resource) then
-        state.package_ready_by_resource[resource] = package_manager or Managers.package or true
-    end
-end
-
-function RawUnits.package_ready(value, package_manager)
-    local resource = resource_from(value)
-    local ready_manager = resource and state.package_ready_by_resource[resource]
-    if ready_manager == nil then
-        return false
-    elseif ready_manager == true then
-        return true
-    end
-    return ready_manager == (package_manager or Managers.package)
-end
-
-function RawUnits.ensure_ready(value, package_ready, package_manager)
+function RawUnits.ensure_ready(value, package_ready)
     local resource = resource_from(value)
     if not valid_resource(resource) then
         return false, "Invalid raw unit resource", false
@@ -614,9 +591,8 @@ function RawUnits.ensure_ready(value, package_ready, package_manager)
     end
 
     local package_name = RawUnits.package_name(resource)
-    local package_is_ready = package_ready == true or RawUnits.package_ready(resource, package_manager)
 
-    if type(package_name) == "string" and package_name ~= "" and not package_is_ready then
+    if type(package_name) == "string" and package_name ~= "" and package_ready ~= true then
         return false, "Unit package is still loading: " .. package_name, true
     end
 
@@ -708,32 +684,6 @@ end
 
 function RawUnits.resource_loadable(value)
     return RawUnits.package_loadable(RawUnits.package_name(value))
-end
-
-function RawUnits.acquire_package(package_name, callback, options)
-    local loader, err = resource_loader()
-    if not loader then
-        return nil, err
-    end
-
-    if not RawUnits.package_loadable(package_name) then
-        return nil, "package is not in this game build"
-    end
-
-    return loader.acquire_package(mod, package_name, callback, options)
-end
-
-function RawUnits.release_ticket(ticket)
-    local loader, err = resource_loader()
-    if not loader then
-        return false, err
-    end
-    return loader.release(ticket)
-end
-
-function RawUnits.ticket_status(ticket)
-    local loader = resource_loader()
-    return loader and loader.status(ticket) or "unavailable"
 end
 
 local function clone_string_map(values)
@@ -1021,8 +971,6 @@ function RawUnits.release_transient_cache()
 end
 
 function RawUnits.release_all()
-    state.package_ready_by_resource = {}
-
     local cache = state.installed_cache
     if type(cache) == "table" then
         for resource in pairs(state.installed_resources or {}) do

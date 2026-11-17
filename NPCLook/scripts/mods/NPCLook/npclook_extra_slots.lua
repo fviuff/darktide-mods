@@ -10,11 +10,11 @@ end
 local util = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_util")
 local RAW_UNITS = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_raw_units")
 local MESHES = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_meshes")
+local PACKAGES = mod:io_dofile("NPCLook/scripts/mods/NPCLook/npclook_packages")
 local loc = util.localize
 local normalize_opacity = util.normalize_opacity
 local apply_opacity_to_units = util.apply_opacity_to_units
 local VisualLoadoutCustomization = require("scripts/extension_systems/visual_loadout/utilities/visual_loadout_customization")
-local ItemPackage = require("scripts/foundation/managers/package/utilities/item_package")
 local Breeds = require("scripts/settings/breed/breeds")
 local ItemSlotSettings = require("scripts/settings/item/item_slot_settings")
 
@@ -30,9 +30,6 @@ local LIVE_HEALTH_INTERVAL = 0.25
 local FIRST_PERSON_RETRY_INTERVAL = 0.25
 local FIRST_PERSON_RETRY_LIMIT = 8
 local PHYSICS_MAINTENANCE_INTERVAL = 1
-local PACKAGE_RELEASE_SETTLE_FRAMES = 60
-local RAW_PACKAGE_RELEASE_SETTLE_FRAMES = 120
-local PACKAGE_RELEASE_GUARD_LIMIT = 600
 local LIVE_CONTEXT = {}
 
 local contexts = {}
@@ -48,64 +45,7 @@ local owned_visual_spawners = setmetatable({}, { __mode = "k" })
 local owned_visual_parents = setmetatable({}, { __mode = "k" })
 local owned_visual_children = setmetatable({}, { __mode = "k" })
 local owned_visual_records = setmetatable({}, { __mode = "k" })
-local package_reference_counter = 0
-local deferred_package_releases = {}
 local live_health_elapsed = 0
-local retained_package_cache = rawget(mod, "npclook_extra_package_cache")
-local suppress_package_unload = false
-
-if type(retained_package_cache) ~= "table" then
-    retained_package_cache = {}
-    rawset(mod, "npclook_extra_package_cache", retained_package_cache)
-end
-
-
--- Package handles are scoped to their PackageManager.
-local entries_by_manager = retained_package_cache.entries_by_manager
-
-if type(entries_by_manager) ~= "table" then
-    entries_by_manager = {}
-
-    if retained_package_cache.package_manager and type(retained_package_cache.entries) == "table" then
-        entries_by_manager[retained_package_cache.package_manager] = retained_package_cache.entries
-        retained_package_cache.current_manager = retained_package_cache.package_manager
-    end
-
-    retained_package_cache.entries_by_manager = entries_by_manager
-    retained_package_cache.package_manager = nil
-    retained_package_cache.entries = nil
-end
-
-local function retained_package_entries(package_manager)
-    if not package_manager then
-        return nil
-    end
-
-    if retained_package_cache.current_manager ~= package_manager then
-        retained_package_cache.current_manager = package_manager
-
-        for manager in pairs(entries_by_manager) do
-            if manager ~= package_manager then
-                entries_by_manager[manager] = nil
-            end
-        end
-    end
-
-    local entries = entries_by_manager[package_manager]
-
-    if type(entries) ~= "table" then
-        entries = {}
-        entries_by_manager[package_manager] = entries
-    end
-
-    return entries
-end
-
-local function cached_package_entries(package_manager)
-    local entries = package_manager and entries_by_manager[package_manager]
-
-    return type(entries) == "table" and entries or nil
-end
 local MATERIAL_TARGET_SEPARATOR = "\29"
 local ANCHOR_ATTACH_NODE_BY_SLOT = {
     slot_gear_head = "j_head",
@@ -860,451 +800,75 @@ local function make_extra_slot_item(item_name, breed_name, value, dependency_mat
     return item
 end
 
-local function item_dependencies(item, definitions, mission)
-    local dependencies = {}
-    local ok, err = pcall(
-        ItemPackage.compile_item_instance_dependencies,
-        item,
-        definitions,
-        dependencies,
-        mission
-    )
-
-    if not ok then
-        return nil, err
-    end
-
-    for package_name in pairs(dependencies) do
-        if type(package_name) ~= "string" or package_name == "" then
-            return nil, string.format("%s has an empty package reference", tostring(item and item.name or "item"))
-        end
-    end
-
-    return dependencies
-end
-
-local function release_package_record(record)
-    if not record or record.released then
-        return true
-    end
-
-    record.cancelled = true
-    record.released = true
-    record.release_queued = nil
-
-    local package_manager = record.package_manager
-    local package_entries = record.package_entries
-    local retained_entries = cached_package_entries(package_manager)
-    local release = package_manager and package_manager.release
-    local seen = {}
-
-    for i = 1, #(package_entries or {}) do
-        local entry = package_entries[i]
-
-        if type(entry) == "table" and not seen[entry] then
-            seen[entry] = true
-
-            if record.retain_packages == true then
-                entry.persistent = true
-            end
-
-            entry.references = math.max((tonumber(entry.references) or 1) - 1, 0)
-
-            if entry.references == 0 and not entry.persistent and not suppress_package_unload
-                and retained_package_cache.current_manager == package_manager
-                and package_manager == Managers.package
-                and package_manager._shutdown_has_started ~= true then
-                if retained_entries and retained_entries[entry.package_name] == entry then
-                    retained_entries[entry.package_name] = nil
-                end
-
-                if entry.resource_loader_ticket then
-                    RAW_UNITS.release_ticket(entry.resource_loader_ticket)
-                elseif entry.load_id and type(release) == "function" then
-                    pcall(release, package_manager, entry.load_id)
-                end
-
-                entry.resource_loader_ticket = nil
-                entry.load_id = nil
-                entry.ready = false
-            end
-        end
-    end
-
-    record.package_entries = nil
-    record.release_guard_units = nil
-
-    return true
-end
-
-local function package_release_guard_alive(units)
-    for i = 1, #(units or {}) do
-        if safe_unit_alive(units[i]) then
-            return true
-        end
-    end
-
-    return false
-end
-
-local function extend_package_release_guard(record, units)
-    if type(record) ~= "table" or type(units) ~= "table" or #units == 0 then
-        return
-    end
-
-    local guard = record.release_guard_units
-
-    if type(guard) ~= "table" then
-        guard = {}
-        record.release_guard_units = guard
-    end
-
-    local seen = {}
-
-    for i = 1, #guard do
-        local unit = guard[i]
-
-        if unit then
-            seen[unit] = true
-        end
-    end
-
-    for i = 1, #units do
-        local unit = units[i]
-
-        if unit and not seen[unit] then
-            seen[unit] = true
-            guard[#guard + 1] = unit
-        end
-    end
-end
-
-local function queue_package_release(context, record, delay)
-    if not record or record.released or record.release_queued then
-        return
-    end
-
-    record.release_queued = true
-
-    local minimum = record.raw_unit
-        and RAW_PACKAGE_RELEASE_SETTLE_FRAMES
-        or PACKAGE_RELEASE_SETTLE_FRAMES
-    local frames = math.max(math.floor(tonumber(delay) or 0), minimum)
-
-    deferred_package_releases[#deferred_package_releases + 1] = {
-        record = record,
-        frames = frames,
-        waited_frames = 0,
-    }
-end
-
-local function update_deferred_package_releases()
-    for i = #deferred_package_releases, 1, -1 do
-        local pending = deferred_package_releases[i]
-        local record = pending.record
-        local guard_alive = package_release_guard_alive(record and record.release_guard_units)
-
-        pending.waited_frames = (pending.waited_frames or 0) + 1
-
-        if guard_alive then
-            if pending.waited_frames >= PACKAGE_RELEASE_GUARD_LIMIT then
-                record.retain_packages = true
-                mod:warning(
-                    "Retaining extra-slot packages for %s because its units did not finish deleting.",
-                    tostring(record.item_name or "unknown")
-                )
-                release_package_record(record)
-                table.remove(deferred_package_releases, i)
-            end
-        else
-            pending.frames = pending.frames - 1
-
-            if pending.frames <= 0 then
-                release_package_record(record)
-                table.remove(deferred_package_releases, i)
-            end
-        end
-    end
-end
-
-local function retire_pending_package(context, id, delay)
+local function retire_pending_package(context, id)
     local pending = context.pending[id]
 
     if pending then
         context.pending[id] = nil
-        pending.cancelled = true
-        queue_package_release(context, pending, delay)
+        PACKAGES.retire(pending)
     end
-end
-
-local function refresh_package_ready(record)
-    if record.cancelled then
-        record.ready = false
-        return false
-    end
-
-    for i = 1, record.expected_loads do
-        local entry = record.package_entries and record.package_entries[i]
-
-        if not entry or not entry.ready then
-            record.waiting_package = record.package_names[i]
-            record.ready = false
-            return false
-        end
-    end
-
-    record.ready = true
-    record.waiting_package = nil
-
-    return true
-end
-
-local function package_entry_has_reference(entry)
-    if type(entry) ~= "table" then
-        return false
-    elseif entry.resource_loader_ticket then
-        local status = RAW_UNITS.ticket_status(entry.resource_loader_ticket)
-        return status == "pending" or status == "loaded"
-    end
-
-    return entry.load_id ~= nil
 end
 
 local function acquire_packages(context, id, item)
-    local package_manager = Managers.package
-    local load = package_manager and package_manager.load
-
-    if type(load) ~= "function" then
-        return nil, loc("error_live_package_manager"), false
-    end
-
-    local use_resource_loader = item.npclook_raw_unit == true and RAW_UNITS.available()
     local waiting = context.pending[id]
 
-    if waiting and (waiting.package_manager ~= package_manager
+    if waiting and (waiting.package_manager ~= Managers.package
         or waiting.item_name ~= item.name
         or waiting.material_signature ~= item.npclook_material_signature
         or waiting.variant_signature ~= item.npclook_raw_variant_signature
         or waiting.transform_signature ~= item.npclook_extra_transform_signature) then
-        retire_pending_package(context, id, 0)
+        retire_pending_package(context, id)
         waiting = nil
     end
 
-    if waiting then
-        refresh_package_ready(waiting)
+    if not waiting then
+        local definitions = context.item_definitions or item_cache()
+        local package_names, dependency_error = PACKAGES.item_dependencies(item, definitions, context.mission)
 
-        if waiting.ready then
-            context.pending[id] = nil
-            return waiting, nil, false
+        if not package_names then
+            return nil, loc("error_package_dependencies", tostring(dependency_error)), false
         end
 
-        return nil, loc("error_live_package_not_ready", tostring(waiting.waiting_package)), true
-    end
-
-    local definitions = context.item_definitions or item_cache()
-    local dependencies, dependency_error = item_dependencies(item, definitions, context.mission)
-
-    if not dependencies then
-        return nil, loc("error_package_dependencies", tostring(dependency_error)), false
-    end
-
-    local package_names = table.keys(dependencies)
-    local retained_entries = retained_package_entries(package_manager)
-    local retain_packages = item.npclook_raw_unit == true
-        and item.npclook_raw_retain_package ~= false
-
-    table.sort(package_names)
-    package_reference_counter = package_reference_counter + 1
-
-    local record = {
-        item_name = item.name,
-        material_signature = item.npclook_material_signature,
-        variant_signature = item.npclook_raw_variant_signature,
-        transform_signature = item.npclook_extra_transform_signature,
-        package_entries = {},
-        package_names = package_names,
-        package_manager = package_manager,
-        ready = #package_names == 0,
-        waiting_package = package_names[1],
-        expected_loads = #package_names,
-        cancelled = false,
-        retain_packages = retain_packages,
-        raw_unit = item.npclook_raw_unit == true,
-    }
-    local reference_name = string.format("NPCLookExtraSlot_%d", package_reference_counter)
-
-    if not record.ready then
-        context.pending[id] = record
-    end
-
-    for i = 1, #package_names do
-        local package_name = package_names[i]
-        local package_entry = retained_entries[package_name]
-
-        if type(package_entry) ~= "table"
-            or package_entry.package_manager ~= package_manager
-            or package_entry.package_name ~= package_name
-            or not package_entry_has_reference(package_entry) then
-            if type(package_entry) == "table"
-                and not package_entry.persistent and not retain_packages then
-                if package_entry.resource_loader_ticket then
-                    RAW_UNITS.release_ticket(package_entry.resource_loader_ticket)
-                elseif package_entry.load_id then
-                    local entry_manager = package_entry.package_manager or package_manager
-                    local release = entry_manager and entry_manager.release
-
-                    if type(release) == "function" and not suppress_package_unload
-                        and entry_manager == Managers.package
-                        and entry_manager._shutdown_has_started ~= true then
-                        pcall(release, entry_manager, package_entry.load_id)
-                    end
-                end
-            end
-
-            retained_entries[package_name] = nil
-            package_entry = nil
-        end
-
-        if package_entry and retain_packages then
-            package_entry.persistent = true
-        end
-
-        if not package_entry then
-            package_entry = {
-                package_manager = package_manager,
-                package_name = package_name,
-                ready = false,
-                references = 0,
-                persistent = retain_packages,
-            }
-            retained_entries[package_name] = package_entry
-            package_entry.references = 1
-            record.package_entries[i] = package_entry
-
-            if use_resource_loader then
-                local function package_loaded(ticket, _, load_error)
-                    local no_longer_retained = retained_entries[package_name] ~= package_entry
-                    local no_references = (tonumber(package_entry.references) or 0) <= 0
-
-                    if no_longer_retained or no_references and not package_entry.persistent then
-                        if ticket and not package_entry.persistent then
-                            RAW_UNITS.release_ticket(ticket)
-                        end
-                        return
-                    elseif load_error then
-                        package_entry.error = tostring(load_error)
-                        return
-                    end
-
-                    package_entry.resource_loader_ticket = ticket
-                    package_entry.ready = true
-
-                    if type(mod.npclook_schedule_reapply) == "function" then
-                        mod.npclook_schedule_reapply()
-                    end
-                end
-
-                local ticket, load_error = RAW_UNITS.acquire_package(
-                    package_name,
-                    package_loaded,
-                    {
-                        prioritize = true,
-                        reference_name = reference_name,
-                    }
-                )
-
-                if not ticket then
-                    context.pending[id] = nil
-
-                    if retained_entries[package_name] == package_entry then
-                        retained_entries[package_name] = nil
-                    end
-
-                    release_package_record(record)
-
+        if item.npclook_raw_unit == true then
+            for i = 1, #package_names do
+                if not RAW_UNITS.package_loadable(package_names[i]) then
                     return nil, loc(
                         "error_live_package_acquire",
-                        tostring(package_name),
-                        tostring(load_error or loc("generic_unknown_error"))
+                        tostring(package_names[i]),
+                        "package is not in this game build"
                     ), false
                 end
-
-                package_entry.resource_loader_ticket = ticket
-                package_entry.ready = RAW_UNITS.ticket_status(ticket) == "loaded"
-            else
-                local function package_loaded(load_id)
-                    local no_longer_retained = retained_entries[package_name] ~= package_entry
-                    local no_references = (tonumber(package_entry.references) or 0) <= 0
-
-                    if no_longer_retained or no_references and not package_entry.persistent then
-                        local release = package_manager and package_manager.release
-
-                        if type(release) == "function" and load_id
-                            and not package_entry.persistent and not suppress_package_unload
-                            and retained_package_cache.current_manager == package_manager then
-                            pcall(release, package_manager, load_id)
-                        end
-
-                        return
-                    end
-
-                    if package_entry.load_id == nil or package_entry.load_id == load_id then
-                        package_entry.load_id = load_id
-                        package_entry.ready = true
-
-                        if type(mod.npclook_schedule_reapply) == "function" then
-                            mod.npclook_schedule_reapply()
-                        end
-                    end
-                end
-
-                local ok_load, load_id = pcall(
-                    load,
-                    package_manager,
-                    package_name,
-                    reference_name,
-                    package_loaded,
-                    true
-                )
-
-                if not ok_load or not load_id then
-                    context.pending[id] = nil
-
-                    if retained_entries[package_name] == package_entry then
-                        retained_entries[package_name] = nil
-                    end
-
-                    release_package_record(record)
-
-                    return nil, loc(
-                        "error_live_package_acquire",
-                        tostring(package_name),
-                        tostring(load_id or loc("generic_unknown_error"))
-                    ), false
-                end
-
-                package_entry.load_id = load_id
             end
         end
 
-        if retain_packages then
-            package_entry.persistent = true
+        local lease, lease_error = PACKAGES.acquire(package_names, "ExtraSlot")
+
+        if not lease then
+            return nil, loc("error_live_package_acquire", tostring(item.name), tostring(lease_error)), false
         end
 
-        if record.package_entries[i] ~= package_entry then
-            package_entry.references = (tonumber(package_entry.references) or 0) + 1
-            record.package_entries[i] = package_entry
+        lease.item_name = item.name
+        lease.material_signature = item.npclook_material_signature
+        lease.variant_signature = item.npclook_raw_variant_signature
+        lease.transform_signature = item.npclook_extra_transform_signature
+
+        if item.npclook_raw_unit == true or item.material_override_apply_to_parent == true then
+            PACKAGES.use_world_rule(lease)
         end
+
+        context.pending[id] = lease
+        waiting = lease
     end
 
-    refresh_package_ready(record)
+    local ready, waiting_package = PACKAGES.ready(waiting)
 
-    if record.ready then
+    if ready then
         context.pending[id] = nil
-        return record, nil, false
+
+        return waiting, nil, false
     end
 
-    return nil, loc("error_live_package_not_ready", tostring(record.waiting_package)), true
+    return nil, loc("error_live_package_not_ready", tostring(waiting_package)), true
 end
 
 local function desired_extra_slots(applied, suppressed, empty, anchors, transforms)
@@ -2489,7 +2053,7 @@ local function destroy_parent_spawn_delta(context, parent_baseline, first_person
     )
 
     if #units > 0 then
-        extend_package_release_guard(package_record, units)
+        PACKAGES.bind(package_record, units)
         destroy_ordered_units(units, context.unit_spawner, context.world)
         flush_unit_spawner(context.unit_spawner)
     end
@@ -2559,7 +2123,7 @@ local function destroy_units(record)
     local package_record = record.package_record
 
     if type(package_record) == "table" and #units > 0 then
-        extend_package_release_guard(package_record, units)
+        PACKAGES.bind(package_record, units)
     end
 
     for i = 1, #units do
@@ -2638,16 +2202,16 @@ local function track_record_deletion_roots(record)
     end
 end
 
-local function remove_extra_slot(context, id, delay)
+local function remove_extra_slot(context, id)
     local record = context.records[id]
 
     if record then
         destroy_units(record)
         context.records[id] = nil
-        queue_package_release(context, record.package_record, delay)
+        PACKAGES.retire(record.package_record)
     end
 
-    retire_pending_package(context, id, delay)
+    retire_pending_package(context, id)
 end
 
 local function configure_context(context, parent_unit, settings)
@@ -2668,13 +2232,13 @@ local function configure_context(context, parent_unit, settings)
         local ids = table.keys(context.records)
 
         for i = 1, #ids do
-            remove_extra_slot(context, ids[i], 0)
+            remove_extra_slot(context, ids[i])
         end
 
         local pending_ids = table.keys(context.pending)
 
         for i = 1, #pending_ids do
-            retire_pending_package(context, pending_ids[i], 0)
+            retire_pending_package(context, pending_ids[i])
         end
     end
 
@@ -3546,7 +3110,7 @@ local function spawn_first_person_visual(context, entry, item, applied_transform
         )
 
         if #units > 0 then
-            extend_package_release_guard(package_record, units)
+            PACKAGES.bind(package_record, units)
             destroy_ordered_units(units, context.unit_spawner, settings.world)
             flush_unit_spawner(context.unit_spawner)
         end
@@ -3727,7 +3291,7 @@ local function spawn_animated_first_person_visual(
         )
 
         if #units > 0 then
-            extend_package_release_guard(package_record, units)
+            PACKAGES.bind(package_record, units)
             destroy_ordered_units(units, context.unit_spawner, settings.world)
             flush_unit_spawner(context.unit_spawner)
         end
@@ -3908,15 +3472,10 @@ local function spawn_extra_slot(context, entry)
     end
 
     if item.npclook_raw_unit == true then
-        RAW_UNITS.mark_package_ready(item, package_record.package_manager)
-        local ready, raw_error, raw_loading = RAW_UNITS.ensure_ready(
-            item,
-            true,
-            package_record.package_manager
-        )
+        local ready, raw_error, raw_loading = RAW_UNITS.ensure_ready(item, true)
 
         if not ready then
-            queue_package_release(context, package_record, 0)
+            PACKAGES.retire(package_record)
             return nil, raw_error or loc("error_raw_unit_unavailable", tostring(item.base_unit)), raw_loading
         end
     end
@@ -3934,7 +3493,7 @@ local function spawn_extra_slot(context, entry)
     end
 
     if not settings.world or not safe_unit_alive(context.parent_unit) then
-        queue_package_release(context, package_record, 0)
+        PACKAGES.retire(package_record)
         return nil, loc("error_local_visual_not_ready"), false
     end
 
@@ -3993,7 +3552,7 @@ local function spawn_extra_slot(context, entry)
         source_settings.lod_group = nil
         source_settings.lod_shadow_group = nil
 
-        local source_error
+        local _, source_error
         pose_source_unit, pose_source_attachment_map, _, source_error = spawn_item_instance(
             item,
             source_settings,
@@ -4109,7 +3668,7 @@ local function spawn_extra_slot(context, entry)
             spawned_world_units = collect_world_spawn_delta(settings.world, world_baseline, context.unit_spawner),
         })
         destroy_parent_spawn_delta(context, parent_child_baseline, first_person_child_baseline, package_record)
-        queue_package_release(context, package_record, 0)
+        PACKAGES.retire(package_record)
         return nil, visual_apply_error("item spawn", spawn_error), false
     end
 
@@ -4255,7 +3814,7 @@ local function spawn_extra_slot(context, entry)
         }
         destroy_units(failed_record)
         destroy_parent_spawn_delta(context, parent_child_baseline, first_person_child_baseline, package_record)
-        queue_package_release(context, package_record, 0)
+        PACKAGES.retire(package_record)
         return nil, visual_apply_error("transform", transform_error), false
     end
 
@@ -4386,6 +3945,7 @@ local function spawn_extra_slot(context, entry)
 
     capture_record_parent_children(record)
     track_record_deletion_roots(record)
+    PACKAGES.bind(package_record, collect_record_units(record))
 
     if loose_transform and is_persistent_ui_preview_context(context) then
         -- Apply the local transform before the first UI render.
@@ -4497,7 +4057,7 @@ local function sync_context(context, entries, retry_failed)
     end
 
     for i = 1, #stale_ids do
-        remove_extra_slot(context, stale_ids[i], 0)
+        remove_extra_slot(context, stale_ids[i])
     end
 
     if #stale_ids > 0 then
@@ -4899,7 +4459,7 @@ function ExtraSlotRuntime.has_context(owner)
     return owner ~= nil and contexts[owner] ~= nil
 end
 
-function ExtraSlotRuntime.clear_context(owner, delay)
+function ExtraSlotRuntime.clear_context(owner)
     local context = contexts[owner]
 
     if not context then
@@ -4909,13 +4469,13 @@ function ExtraSlotRuntime.clear_context(owner, delay)
     local ids = table.keys(context.records)
 
     for i = 1, #ids do
-        remove_extra_slot(context, ids[i], delay)
+        remove_extra_slot(context, ids[i])
     end
 
     local pending_ids = table.keys(context.pending)
 
     for i = 1, #pending_ids do
-        retire_pending_package(context, pending_ids[i], delay)
+        retire_pending_package(context, pending_ids[i])
     end
 
     flush_unit_spawner(context.unit_spawner)
@@ -5127,7 +4687,7 @@ function ExtraSlotRuntime.cleanup_owned_parent_children(parent_unit, unit_spawne
     return destroyed
 end
 
-function ExtraSlotRuntime.clear_parent_unit(parent_unit, delay)
+function ExtraSlotRuntime.clear_parent_unit(parent_unit)
     local owner_set = parent_unit and contexts_by_parent[parent_unit]
 
     if not owner_set then
@@ -5137,12 +4697,12 @@ function ExtraSlotRuntime.clear_parent_unit(parent_unit, delay)
     local owners = table.keys(owner_set)
 
     for i = 1, #owners do
-        ExtraSlotRuntime.clear_context(owners[i], delay)
+        ExtraSlotRuntime.clear_context(owners[i])
     end
 end
 
-function ExtraSlotRuntime.clear(delay)
-    ExtraSlotRuntime.clear_context(LIVE_CONTEXT, delay)
+function ExtraSlotRuntime.clear()
+    ExtraSlotRuntime.clear_context(LIVE_CONTEXT)
 end
 
 function ExtraSlotRuntime.context_material_target_data(owner, id)
@@ -5521,8 +5081,7 @@ end
 function ExtraSlotRuntime.has_update_work()
     local live_context = contexts[LIVE_CONTEXT]
 
-    return #deferred_package_releases > 0
-        or next(raw_equipment_records) ~= nil
+    return next(raw_equipment_records) ~= nil
         or next(physics_contexts) ~= nil
         or next(dirty_contexts) ~= nil
         or live_context ~= nil and next(live_context.records) ~= nil
@@ -5564,8 +5123,6 @@ function ExtraSlotRuntime.update(dt)
             retry_first_person_visual(live_context, record, dt)
         end
     end
-
-    update_deferred_package_releases()
 
     for tracker in pairs(raw_equipment_records) do
         if not record_roots_alive(tracker.record) then
@@ -5631,7 +5188,7 @@ function ExtraSlotRuntime.update(dt)
         end
 
         for i = 1, #failed_ids do
-            remove_extra_slot(context, failed_ids[i], 0)
+            remove_extra_slot(context, failed_ids[i])
         end
 
         refresh_context_activity(context)
@@ -5685,7 +5242,7 @@ function ExtraSlotRuntime.update(dt)
             end
 
             for i = 1, #invalid_ids do
-                remove_extra_slot(context, invalid_ids[i], 0)
+                remove_extra_slot(context, invalid_ids[i])
             end
 
             if #invalid_ids > 0 then
@@ -5702,11 +5259,6 @@ end
 ExtraSlotRuntime.is_parent_material_item = is_parent_material_item
 
 function ExtraSlotRuntime.release_all()
-    for i = #deferred_package_releases, 1, -1 do
-        release_package_record(deferred_package_releases[i].record)
-        deferred_package_releases[i] = nil
-    end
-
     local owners = table.keys(contexts)
     local unit_spawners = {}
 
@@ -5717,7 +5269,7 @@ function ExtraSlotRuntime.release_all()
     end
 
     for i = 1, #owners do
-        ExtraSlotRuntime.clear_context(owners[i], 0)
+        ExtraSlotRuntime.clear_context(owners[i])
     end
 
     for unit, owned in pairs(owned_visual_units) do
@@ -5764,17 +5316,7 @@ function ExtraSlotRuntime.release_all()
     live_health_elapsed = 0
 end
 
-function ExtraSlotRuntime.begin_shutdown()
-    -- This must run before any visual teardown. Removing a unit can queue package
-    -- retirement, and a hot reload may continue PackageManager updates before the
-    -- replacement mod instance has loaded.
-    suppress_package_unload = true
-end
-
-function ExtraSlotRuntime.shutdown()
-    ExtraSlotRuntime.begin_shutdown()
-    ExtraSlotRuntime.release_all()
-end
+ExtraSlotRuntime.shutdown = ExtraSlotRuntime.release_all
 
 rawset(mod, "npclook_extra_slot_runtime", ExtraSlotRuntime)
 

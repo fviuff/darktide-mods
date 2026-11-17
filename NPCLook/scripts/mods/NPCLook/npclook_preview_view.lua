@@ -482,7 +482,7 @@ NPCLookStudioPreviewView._preview_snapshot = function(self)
 end
 
 NPCLookStudioPreviewView._clear_preview_extra_slots = function(self)
-    extra_slot_runtime.clear_context(self, 0)
+    extra_slot_runtime.clear_context(self)
 
     local unit_spawner = self._profile_spawner and self._profile_spawner._unit_spawner
     local flush = unit_spawner and (

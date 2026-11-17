@@ -89,20 +89,10 @@ return {
         ru = "неверный слот: %s",
         ["zh-cn"] = "无效槽位：%s",
     },
-    error_item_nil = {
-        en = "item instance is nil",
-        ru = "экземпляр предмета равен nil",
-        ["zh-cn"] = "物品实例为空",
-    },
     error_live_package_acquire = {
         en = "could not retain live cosmetic package %s: %s",
         ru = "не удалось удержать живой косметический пакет %s: %s",
         ["zh-cn"] = "无法占用资源包 %s：%s",
-    },
-    error_live_package_manager = {
-        en = "live cosmetic package manager is unavailable",
-        ru = "менеджер живых косметических пакетов недоступен",
-        ["zh-cn"] = "资源包管理器不可用",
     },
     error_live_package_not_ready = {
         en = "cosmetic package is still loading: %s",
@@ -148,11 +138,6 @@ return {
         en = "outfit has no usable pieces",
         ru = "в наряде нет полезных частей",
         ["zh-cn"] = "该套装不含可用部件",
-    },
-    error_restore_removed = {
-        en = "could not restore removed slots",
-        ru = "не удалось восстановить удалённые слоты",
-        ["zh-cn"] = "无法恢复已移除的槽位",
     },
     error_should_empty = {
         en = "%s should be empty",
@@ -1193,6 +1178,10 @@ return {
     ui_mask_field_hide_eyebrows = {
         en = "EYEBROWS",
         ["zh-cn"] = "眉毛",
+    },
+    ui_mask_field_stabilize_neck = {
+        en = "NECK LOCK",
+        ["zh-cn"] = "颈部锁定",
     },
     ui_mask_field_mask_torso_item = {
         en = "TORSO",

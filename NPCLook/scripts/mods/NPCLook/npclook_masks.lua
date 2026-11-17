@@ -66,6 +66,10 @@ local FIELD_SPECS = {
         prefixes = { "mask_legs", "mask_feet" },
         reset = "content/items/material_overrides/player_base_body_mask/mask_default",
     },
+    {
+        name = "stabilize_neck",
+        kind = "number",
+    },
 }
 
 local SLOT_FIELDS = {
@@ -152,6 +156,8 @@ local function has_value(value)
         return value ~= ""
     elseif value_type == "table" then
         return next(value) ~= nil
+    elseif value_type == "number" then
+        return value > 0
     end
 
     return value ~= nil
@@ -351,7 +357,7 @@ local function valid_override(spec, value)
         return type(value) == "boolean"
     elseif spec.kind == "string" then
         return value == false or type(value) == "string" and value ~= ""
-    elseif spec.kind == "table" then
+    elseif spec.kind == "table" or spec.kind == "number" then
         return value == false
     end
 
@@ -397,6 +403,8 @@ local function configured_value(spec, value)
         return spec.reset
     elseif spec.kind == "table" then
         return {}
+    elseif spec.kind == "number" then
+        return 0
     end
 end
 
@@ -852,6 +860,8 @@ local function active_authored_value(spec, value)
         return type(value) == "string" and value ~= "" and value ~= spec.reset and value or nil
     elseif spec.kind == "table" then
         return type(value) == "table" and next(value) ~= nil and value or nil
+    elseif spec.kind == "number" then
+        return type(value) == "number" and value > 0 and value or nil
     end
 end
 
@@ -935,7 +945,7 @@ local function field_options(item, field, definitions)
                 seen[candidate.value] = true
             end
         end
-    elseif spec.kind == "table" and active_authored then
+    elseif (spec.kind == "table" or spec.kind == "number") and active_authored then
         options[1] = {
             id = "authored",
             label = "AUTHORED",
@@ -1001,6 +1011,8 @@ function Masks.rows(item, definitions, slot_name, state)
         if enabled then
             if spec.kind == "table" then
                 value_label = "AUTHORED"
+            elseif spec.kind == "number" then
+                value_label = "ON"
             elseif current_index and options[current_index] then
                 value_label = options[current_index].label
             elseif spec.kind == "boolean" then
