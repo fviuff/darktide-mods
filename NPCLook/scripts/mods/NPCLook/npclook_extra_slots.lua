@@ -3683,6 +3683,20 @@ local function spawn_extra_slot(context, entry)
         pose_source_attachment_map = pose_source_attachment_map or {},
     })
 
+    if deformed_transform then
+        -- Reapply parent-facing effects to the real character.
+        pcall(
+            VisualLoadoutCustomization.apply_material_overrides,
+            item,
+            item_unit,
+            context.parent_unit,
+            settings
+        )
+        if item.npclook_raw_unit ~= true then
+            pcall(VisualLoadoutCustomization.play_item_on_spawn_anim_event, item, context.parent_unit)
+        end
+    end
+
     local material_entries = {}
 
     for i = 1, #(item.npclook_dependency_material_overrides or {}) do
@@ -3704,20 +3718,6 @@ local function spawn_extra_slot(context, entry)
         material_entries
     )
     RAW_UNITS.apply_variants(item, item_unit, attachment_units, entry.variant_state)
-
-    if deformed_transform then
-        -- Reapply parent-facing effects to the real character.
-        pcall(
-            VisualLoadoutCustomization.apply_material_overrides,
-            item,
-            item_unit,
-            context.parent_unit,
-            settings
-        )
-        if item.npclook_raw_unit ~= true then
-            pcall(VisualLoadoutCustomization.play_item_on_spawn_anim_event, item, context.parent_unit)
-        end
-    end
 
     local applied_transform = normalize_transform(entry.transform)
 
